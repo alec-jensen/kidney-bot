@@ -1,6 +1,6 @@
 # kidney bot
 
-Don't want to host yourself? Add the bot [here](https://kidneybot.tk/)!
+Don't want to host yourself? Add the bot [here](https://kidneybot.tk/invite)!
 
 Want to run the bot yourself? Follow these instructions:
 
