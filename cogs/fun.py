@@ -1,3 +1,7 @@
+# This cog contains most of the fun commands
+# Copyright (C) 2022  Alec Jensen
+# Full license at LICENSE.md
+
 import discord
 from discord.ext import commands
 import requests
