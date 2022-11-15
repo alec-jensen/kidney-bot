@@ -1,4 +1,4 @@
-# This cog contains most of the fun commands
+# This cog creates all "fun" commands
 # Copyright (C) 2022  Alec Jensen
 # Full license at LICENSE.md
 
