@@ -91,7 +91,6 @@ async def status():
 @bot.listen('on_ready')
 async def on_ready():
     print(f'We have logged in as {bot.user}')
-    print(bot.config)
 
 
 @bot.listen('on_guild_join')
@@ -123,7 +122,7 @@ async def on_message(message):
         await message.reply(f'My prefix in this guild is: `{prefix}`')
 
 
-@app_commands.command(name="load")
+@bot.tree.command(name="load")
 @PermissionsChecks.is_owner()
 async def load(interaction: discord.Interaction, extension: str):
     try:
@@ -133,7 +132,7 @@ async def load(interaction: discord.Interaction, extension: str):
         await interaction.response.send_message(f'Could not load cog {extension}\n`{e}`')
 
 
-@app_commands.command(name="unload")
+@bot.tree.command(name="unload")
 @PermissionsChecks.is_owner()
 async def unload(interaction: discord.Interaction, extension: str):
     try:
@@ -143,7 +142,7 @@ async def unload(interaction: discord.Interaction, extension: str):
         await interaction.response.send_message(f'Could not unload cog {extension}\n`{e}`')
 
 
-@app_commands.command(name="reload")
+@bot.tree.command(name="reload")
 @PermissionsChecks.is_owner()
 async def reload(interaction: discord.Interaction, extension: str):
     try:
@@ -157,22 +156,29 @@ async def reload(interaction: discord.Interaction, extension: str):
         await interaction.response.send_message(f'Could not load cog {extension}\n`{e}`')
 
 
-@app_commands.command(name="say")
+@bot.tree.command(name="say")
 @PermissionsChecks.is_owner()
 async def say(interaction: discord.Interaction, *, text: str):
+    await interaction.response.send_message('a', ephemeral=True)
     await interaction.channel.send(text)
 
 
-@app_commands.command(name="reply")
+@bot.tree.command(name="reply")
 @PermissionsChecks.is_owner()
-async def reply(interaction: discord.Interaction, message: int, *, text: str):
-    await interaction.channel.fetch_message(message).reply(text)
+async def reply(interaction: discord.Interaction, message: str, *, text: str):
+    await interaction.response.send_message('a', ephemeral=True)
+    channel = interaction.channel
+    message = await channel.fetch_message(int(message))
+    await message.reply(text)
 
 
-@app_commands.command(name='react')
+@bot.tree.command(name='react')
 @PermissionsChecks.is_owner()
-async def react(interaction: discord.Interaction, message: int, reaction: str):
-    await interaction.channel.fetch_message(message).add_reaction(reaction)
+async def react(interaction: discord.Interaction, message: str, reaction: str):
+    await interaction.response.send_message('a', ephemeral=True)
+    channel = interaction.channel
+    message = await channel.fetch_message(int(message))
+    await message.add_reaction(reaction)
 
 
 @bot.listen('on_command_error')
@@ -209,7 +215,7 @@ async def on_command_error(ctx, error):
                 print(formattedTB)
 
 
-@app_commands.command()
+@bot.tree.command()
 @PermissionsChecks.is_owner()
 async def announce(interaction: discord.Interaction, *, message: str):
     await interaction.response.send_message(f'Sent global message\n```{message}```', ephemeral=True)
@@ -221,13 +227,13 @@ async def announce(interaction: discord.Interaction, *, message: str):
             ids.append(int(guild.owner_id))
 
 
-@app_commands.command()
+@bot.tree.command()
 @PermissionsChecks.is_owner()
 async def raiseexception(interaction: discord.Interaction):
     raise Exception('artificial exception raised')
 
 
-@app_commands.command()
+@bot.tree.command()
 @PermissionsChecks.is_owner()
 async def serverban(interaction: discord.Interaction, guild: int, *, text: str):
     guild = bot.get_guild(guild)
@@ -261,7 +267,7 @@ async def serverban(interaction: discord.Interaction, guild: int, *, text: str):
     await guild.leave()
 
 
-@app_commands.command()
+@bot.tree.command()
 @PermissionsChecks.is_owner()
 async def serverunban(interaction: discord.Interaction, guild: str):
     n = await bot.database.serverbans.count_documents({"id": str(guild)})
@@ -272,7 +278,7 @@ async def serverunban(interaction: discord.Interaction, guild: str):
     await interaction.response.send_message(f"Server *{guild}* has been unbanned from using **{bot.user.name}**")
 
 
-@app_commands.command()
+@bot.tree.command()
 @PermissionsChecks.is_owner()
 async def createinvite(interaction: discord.Interaction, guild: int):
     guild = bot.get_guild(guild)
