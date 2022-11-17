@@ -4,27 +4,25 @@
 
 import discord
 from discord.ext import commands
-from discord import app_commands
 import random
 import asyncio
 import os
 import traceback
 import logging
-import PermissionsChecks
 import json
 
 logging.basicConfig(level=logging.WARNING)
 
+
+class KidneyBotConfig:
+    def __init__(self, conf):
+        self.token = conf['token']
+        self.dbstring = conf['dbstring']
+        self.owner_id = int(conf['ownerid'])
+
+
 with open('config.json', 'r') as f:
-    config = json.load(f)
-
-
-async def get_prefix(client, message):
-    doc = await client.database.prefixes.find_one({"id": str(message.guild.id)})
-    if doc is None:
-        doc = {"prefix": "."}
-
-    return commands.when_mentioned_or(doc["prefix"])(client, message)
+    config = KidneyBotConfig(json.load(f))
 
 
 # bot = commands.Bot(command_prefix=(get_prefix), owner_id=766373301169160242, intents=discord.Intents.all())
@@ -38,7 +36,7 @@ class MyBot(commands.Bot):
             intents=intents
         )
         import motor.motor_asyncio
-        client = motor.motor_asyncio.AsyncIOMotorClient(config['dbstring'])
+        client = motor.motor_asyncio.AsyncIOMotorClient(config.dbstring)
         self.database = client.data
         self.config = config
 
@@ -72,12 +70,12 @@ class MyBot(commands.Bot):
             })
 
 
-bot = MyBot(command_prefix=(get_prefix),
-            owner_id=766373301169160242,
+bot = MyBot(command_prefix='kb.',
+            owner_id=config.owner_id,
             intents=discord.Intents.all()
             )
 
-statuses = ["with the fate of the world", "minecraft", ".help", ".prefix"]
+statuses = ["with the fate of the world", "minecraft"]
 
 
 async def status():
@@ -115,68 +113,61 @@ async def on_guild_remove(guild):
     await bot.database.prefixes.remove_many({"id": str(guild.ID)})
 
 
-@bot.listen('on_message')
-async def on_message(message):
-    if message.content.lower() == '.prefix':
-        prefix = await get_prefix(bot, message)
-        await message.reply(f'My prefix in this guild is: `{prefix}`')
-
-
-@bot.tree.command(name="load")
-@PermissionsChecks.is_owner()
-async def load(interaction: discord.Interaction, extension: str):
+@bot.command()
+@commands.is_owner()
+async def load(ctx, extension: str):
     try:
         await bot.load_extension(f'cogs.{extension}')
-        await interaction.response.send_message(f'Loaded cog {extension}')
+        await ctx.reply(f'Loaded cog {extension}')
     except Exception as e:
-        await interaction.response.send_message(f'Could not load cog {extension}\n`{e}`')
+        await ctx.reply(f'Could not load cog {extension}\n`{e}`')
 
 
-@bot.tree.command(name="unload")
-@PermissionsChecks.is_owner()
-async def unload(interaction: discord.Interaction, extension: str):
+@bot.command()
+@commands.is_owner()
+async def unload(ctx, extension: str):
     try:
         await bot.unload_extension(f'cogs.{extension}')
-        await interaction.response.send_message(f'Unlodaded cog {extension}')
+        await ctx.reply(f'Unlodaded cog {extension}')
     except Exception as e:
-        await interaction.response.send_message(f'Could not unload cog {extension}\n`{e}`')
+        await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
 
 
-@bot.tree.command(name="reload")
-@PermissionsChecks.is_owner()
-async def reload(interaction: discord.Interaction, extension: str):
+@bot.command()
+@commands.is_owner()
+async def reload(ctx, extension: str):
     try:
         await bot.unload_extension(f'cogs.{extension}')
     except Exception as e:
-        await interaction.response.send_message(f'Could not unload cog {extension}\n`{e}`')
+        await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
     try:
         await bot.load_extension(f'cogs.{extension}')
-        await interaction.response.send_message(f'Reloaded cog {extension}')
+        await ctx.reply(f'Reloaded cog {extension}')
     except Exception as e:
-        await interaction.response.send_message(f'Could not load cog {extension}\n`{e}`')
+        await ctx.reply(f'Could not load cog {extension}\n`{e}`')
 
 
-@bot.tree.command(name="say")
-@PermissionsChecks.is_owner()
-async def say(interaction: discord.Interaction, *, text: str):
-    await interaction.response.send_message('a', ephemeral=True)
-    await interaction.channel.send(text)
+@bot.command()
+@commands.is_owner()
+async def say(ctx, *, text: str):
+    await ctx.message.delete()
+    await ctx.channel.send(text)
 
 
-@bot.tree.command(name="reply")
-@PermissionsChecks.is_owner()
-async def reply(interaction: discord.Interaction, message: str, *, text: str):
-    await interaction.response.send_message('a', ephemeral=True)
-    channel = interaction.channel
+@bot.command()
+@commands.is_owner()
+async def reply(ctx, message: str, *, text: str):
+    await ctx.message.delete()
+    channel = ctx.channel
     message = await channel.fetch_message(int(message))
     await message.reply(text)
 
 
-@bot.tree.command(name='react')
-@PermissionsChecks.is_owner()
-async def react(interaction: discord.Interaction, message: str, reaction: str):
-    await interaction.response.send_message('a', ephemeral=True)
-    channel = interaction.channel
+@bot.command()
+@commands.is_owner()
+async def react(ctx, message: str, reaction: str):
+    await ctx.message.delete()
+    channel = ctx.channel
     message = await channel.fetch_message(int(message))
     await message.add_reaction(reaction)
 
@@ -215,10 +206,10 @@ async def on_command_error(ctx, error):
                 print(formattedTB)
 
 
-@bot.tree.command()
-@PermissionsChecks.is_owner()
-async def announce(interaction: discord.Interaction, *, message: str):
-    await interaction.response.send_message(f'Sent global message\n```{message}```', ephemeral=True)
+@bot.command()
+@commands.is_owner()
+async def announce(ctx, *, message: str):
+    await ctx.reply(f'Sent global message\n```{message}```')
     ids = []
     for guild in bot.guilds:
         if int(guild.owner_id) not in ids:
@@ -227,19 +218,18 @@ async def announce(interaction: discord.Interaction, *, message: str):
             ids.append(int(guild.owner_id))
 
 
-@bot.tree.command()
-@PermissionsChecks.is_owner()
-async def raiseexception(interaction: discord.Interaction):
+@bot.command()
+@commands.is_owner()
+async def raiseexception(ctx):
     raise Exception('artificial exception raised')
 
 
-@bot.tree.command()
-@PermissionsChecks.is_owner()
-async def serverban(interaction: discord.Interaction, guild: int, *, text: str):
-    guild = bot.get_guild(guild)
+@bot.command()
+@commands.is_owner()
+async def serverban(ctx, guild: discord.Guild, *, text: str):
     n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
     if n > 0:
-        await interaction.response.send_message("Server already banned!", ephemeral=True)
+        await ctx.response.send_message("Server already banned!", ephemeral=True)
         return
     doc = {
         "id": str(guild.id),
@@ -250,7 +240,7 @@ async def serverban(interaction: discord.Interaction, guild: int, *, text: str):
     embed = discord.Embed(title=f"{guild} has been banned.",
                           description=f"Your server *{guild}* has been banned from using **{bot.user.name}**.",
                           color=discord.Color.red())
-    embed.add_field(name=f"You can appeal by contacting __**{interaction.user}**__.", value="\u2800")
+    embed.add_field(name=f"You can appeal by contacting __**{ctx.message.author}**__.", value="\u2800")
     embed.add_field(name="Reason", value=f"```{text}```")
     embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
     await guild.owner.send(embed=embed)
@@ -261,27 +251,26 @@ async def serverban(interaction: discord.Interaction, guild: int, *, text: str):
     }
     with open("serverbans.json", "w") as file:
         json.dump(serverbandic, file)"""
-    await interaction.response.send_message(
+    await ctx.reply(
         f"Server *{guild}* has been permanently blacklisted from using **{bot.user.name}**")
     bot.database.serverbans.insert_one(doc)
     await guild.leave()
 
 
-@bot.tree.command()
-@PermissionsChecks.is_owner()
-async def serverunban(interaction: discord.Interaction, guild: str):
+@bot.command()
+@commands.is_owner()
+async def serverunban(ctx, guild: str):
     n = await bot.database.serverbans.count_documents({"id": str(guild)})
     if n == 0:
-        await interaction.response.send_message("Server not banned!")
+        await ctx.reply("Server not banned!")
         return
     await bot.database.serverbans.delete_one({"id": str(guild)})
-    await interaction.response.send_message(f"Server *{guild}* has been unbanned from using **{bot.user.name}**")
+    await ctx.reply(f"Server *{guild}* has been unbanned from using **{bot.user.name}**")
 
 
-@bot.tree.command()
-@PermissionsChecks.is_owner()
-async def createinvite(interaction: discord.Interaction, guild: int):
-    guild = bot.get_guild(guild)
+@bot.command()
+@commands.is_owner()
+async def createinvite(ctx, guild: discord.Guild):
     inv = 'error'
     for i in guild.text_channels:
         try:
@@ -289,7 +278,7 @@ async def createinvite(interaction: discord.Interaction, guild: int):
             break
         except:
             pass
-    await interaction.response.send_message(inv)
+    await ctx.reply(inv)
 
 
 async def main():
@@ -302,7 +291,7 @@ async def main():
 
         asyncio.create_task(status())
 
-        await bot.start(config['token'])
+        await bot.start(config.token)
 
 
 asyncio.run(main())

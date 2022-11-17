@@ -11,5 +11,5 @@ with open('config.json', 'r') as f:
 
 def is_owner():
     def predicate(interaction: discord.Interaction) -> bool:
-        return str(interaction.user.id) in config['ownerid']
+        return str(interaction.user.id) == config.ownerid
     return app_commands.check(predicate)

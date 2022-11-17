@@ -49,7 +49,7 @@ else:
         conf = json.load(f)
         conf['token'] = token
         conf['dbstring'] = dbstring
-        conf['ownerid'] = [ownerid]
+        conf['ownerid'] = ownerid
 
     if not os.path.exists('venv'):
         print('Please reinstall the venv correctly, as described in README.md')
