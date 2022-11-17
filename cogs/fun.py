@@ -4,141 +4,119 @@
 
 import discord
 from discord.ext import commands
-import requests
-import asyncio
+from discord import app_commands
 import random
-
-
-def initdb():
-    global dataDB
-    import motor.motor_asyncio
-    with open('dbstring.txt') as f:
-        string = f.readlines()
-    client = motor.motor_asyncio.AsyncIOMotorClient(string)
-    dataDB = client.data
-
-
-async def addcurrency(user: discord.User, value: int, location: str):
-    n = await dataDB.currency.count_documents({"userID": str(user.id)})
-    if n == 1:
-        doc = await dataDB.currency.find_one({"userID": str(user.id)})
-        if location == 'wallet':
-            await dataDB.currency.update_one({'userID': str(userID)}, {'$set': {'wallet': str(int(doc['wallet']) + value)}})
-        elif location == 'bank':
-            await dataDB.currency.update_one({'userID': str(userID)}, {'$set': {'bank': str(int(doc['bank']) + value)}})
-    else:
-        wallet, bank = (0, 0)
-        if location == 'wallet':
-            wallet = value
-        elif location == 'bank':
-            bank = value
-        await dataDB.currency.insert_one({
-            "userID": str(user.id),
-            "wallet": str(wallet),
-            "bank": str(bank),
-            "inventory": []
-        })
+import aiohttp
 
 
 class Fun(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
+        self.scenarios = [
+            ['D', 'L', 'W'],
+            ['W', 'D', 'L'],
+            ['L', 'W', 'D'],
+        ]
 
     @commands.Cog.listener()
     async def on_ready(self):
         print('Fun cog loaded.')
 
-    @commands.command(brief='Get a yomama joke', help='Get a yomama joke hot off the press.')
-    async def yomama(self, ctx):
-        result = requests.get('https://api.yomomma.info/').json()
-        await ctx.message.reply(result["joke"])
+    @app_commands.command(name="yomama", description="get a yo mama joke")
+    async def yomama(self, interaction: discord.Interaction):
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get('https://api.yomomma.info/') as r:
+                res = await r.json()  # returns dict
+                await interaction.response.send_message(res["joke"])
 
-    @commands.command(brief='Get a dad joke', help='Get a dad joke straight from certified dads.')
-    async def dadjoke(self, ctx):
-        result = requests.get('https://icanhazdadjoke.com/', headers={"Accept": "application/json"}).json()
-        await ctx.message.reply(result["joke"])
+    @app_commands.command(name="dadjoke", description="get dad joked")
+    async def dadjoke(self, interaction: discord.Interaction):
+        #result = requests.get('https://icanhazdadjoke.com/', headers={"Accept": "application/json"}).json()
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get('https://icanhazdadjoke.com/', headers={"Accept": "application/json"}) as r:
+                res = await r.json()
+                await interaction.response.send_message(res["joke"])
 
-    @commands.command(brief='Get a dog pic', help='Get a random dog pic. Who doesnt love dogs?')
-    async def dog(self, ctx):
-        result = requests.get('https://dog.ceo/api/breeds/image/random').json()
-        await ctx.message.reply(result["message"])
+    @app_commands.command(name="dog", description="dog pic")
+    async def dog(self, interaction: discord.Interaction):
+        #result = requests.get('https://dog.ceo/api/breeds/image/random').json()
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get('https://dog.ceo/api/breeds/image/random') as r:
+                res = await r.json()
+                await interaction.response.send_message(res["message"])
 
-    @commands.command(brief='Get a duck pic',
-                      help='Get a random quacker image and participate in a minute amount of tomfoolery.')
-    async def duck(self, ctx):
-        result = requests.get('https://random-d.uk/api/random').json()
-        await ctx.message.reply(result["url"])
+    @app_commands.command(name="duck", description="get a duck pic")
+    async def duck(self, interaction: discord.Interaction):
+        #result = requests.get('https://random-d.uk/api/random').json()
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get('https://random-d.uk/api/random') as r:
+                res = await r.json()
+                await interaction.response.send_message(res["url"])
 
-    @commands.command(brief='Cat pic', help='I hate cats.')
-    async def cat(self, ctx):
-        result = requests.get('https://aws.random.cat/meow').json()
-        await ctx.message.reply(result["file"])
+    @app_commands.command(name="cat", description='cat pic')
+    async def cat(self, interaction: discord.Interaction):
+        #result = requests.get('https://aws.random.cat/meow').json()
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get('https://aws.random.cat/meow') as r:
+                res = await r.json()
+                await interaction.response.send_message(res["file"])
 
-    @commands.command(brief='Get roasted', help="Have the bot roast you? I don't know why you would want that...")
-    async def roast(self, ctx):
-        await ctx.message.reply("This command again no longer works.")
-        """result = requests.get('http://insultgenerator.apiblueprint.org/insults').json()
-        await ctx.message.reply(result['insults']['insult_name'].replace('<name', ctx.author.name))"""
+    @app_commands.command(name="meme", description="🤣")
+    async def meme(self, interaction: discord.Interaction):
+        #result = requests.get('https://meme-api.herokuapp.com/gimme').json()
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get('https://meme-api.herokuapp.com/gimme') as r:
+                res = await r.json()
+                await interaction.response.send_message(res["url"])
 
-    @commands.command(brief=':rofl:',
-                      help=':smile: :face_with_symbols_over_mouth: :cold_face: :kissing_smiling_eyes: :imp: :point_right: :call_me: :muscle: :leg: :persevere:')
-    async def meme(self, ctx):
-        result = requests.get('https://meme-api.herokuapp.com/gimme').json()
-        await ctx.message.reply(result["url"])
+    @app_commands.command(name="joke", description="its just a joke??")
+    async def joke(self, interaction: discord.Interaction):
+        #result = requests.get('https://v2.jokeapi.dev/joke/Any').json()
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get('https://v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,racist,sexist,explicit&type=single') as r:
+                res = await r.json()
+                await interaction.response.send_message(res['joke'])
 
-    @commands.command(brief='its a joke..', help='its just a joke...... why do you need help???')
-    async def joke(self, ctx):
-        result = requests.get('https://v2.jokeapi.dev/joke/Any').json()
-        if result['type'] == 'twopart':
-            await ctx.message.reply(result["setup"])
-            async with ctx.typing():
-                await asyncio.sleep(1)
-            await ctx.send(result['delivery'])
-        elif result['type'] == 'single':
-            await ctx.message.reply(result['joke'])
-
-    @commands.command(brief='magic', help='get advice on anything', name='8ball')
-    async def _8ball(self, ctx):
+    @app_commands.command(name='8ball', description='get advice on anything')
+    async def _8ball(self, interaction: discord.Interaction, question: str):
         responses = ['indeed', 'undoubtedly', 'no', 'dunno', 'indecisive']
-        await ctx.reply(f':8ball: {random.choice(responses)}')
+        await interaction.response.send_message(f'> {question}\n:8ball: {random.choice(responses)}')
 
-    @commands.command(brief='play rps for money', help='play rock paper scissors against me', aliases=['rps'])
-    async def rockpaperscissors(self, ctx):
-        await ctx.reply('Send R for :rock:, send P for :scroll:, send S for :scissors:')
-        choices = ['R', 'P', 'S']
-        choice = random.choice(choices)
+    @app_commands.command(name='rps', description='play rps for money')
+    async def rps(self, interaction: discord.Interaction):
+        await interaction.response.send_message('Send R for :rock:, send P for :scroll:, send S for :scissors:')
 
         def check(m):
-            return m.content.lower() in ['r', 'p', 's'] and m.channel == ctx.channel and m.author == ctx.author
+            return m.content.lower() in ['r', 'p', 's'] and m.channel == interaction.channel and m.author == interaction.user
 
         message = await self.bot.wait_for('message', check=check, timeout=15)
         if message.content.lower() == 'r':
-            if choice == 'R':
-                await message.reply(f'Tie!')
-            elif choice == 'P':
-                await message.reply('Loss!')
-            elif choice == 'S':
-                await message.reply('Win!')
-                addcurrency(ctx.author, 50, 'wallet')
-        if message.content.lower() == 'p':
-            if choice == 'R':
-                await message.reply('Win!')
-                addcurrency(ctx.author, 50, 'wallet')
-            elif choice == 'P':
-                await message.reply('Tie!')
-            elif choice == 'S':
-                await message.reply('Loss!')
-        if message.content.lower() == 's':
-            if choice == 'R':
-                await message.reply('Loss!')
-            elif choice == 'P':
-                await message.reply('Win!')
-                addcurrency(ctx.author, 50, 'wallet')
-            elif choice == 'S':
-                await message.reply('Tie!')
+            player = 0
+        elif message.content.lower() == 'p':
+            player = 1
+        elif message.content.lower() == 's':
+            player = 2
+        while True:
+            computer = random.randint(0, 2)
+            if self.scenarios[player][computer] == 'L':
+                if random.randint(0, 2) == 0:
+                    break
+                else:
+                    continue
+            elif self.scenarios[player][computer] in ['W', 'D']:
+                break
+        outcome = self.scenarios[player][
+            computer]  # Check the table for the outcome
+
+        if outcome == 'W':
+            await message.reply('You win! +50 beans')
+            await self.bot.addcurrency(message.author, 50, 'wallet')
+        elif outcome == 'L':
+            await message.reply('I win!')
+        elif outcome == 'D':
+            await message.reply('Draw!')
 
 
 async def setup(bot):
-    initdb()
     await bot.add_cog(Fun(bot))

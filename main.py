@@ -4,102 +4,78 @@
 
 import discord
 from discord.ext import commands
+from discord import app_commands
 import random
 import asyncio
 import os
 import traceback
 import logging
+import PermissionsChecks
+import json
 
 logging.basicConfig(level=logging.WARNING)
 
-dataDB = None
-
-
-def initdb():
-    global dataDB
-    import motor.motor_asyncio
-    with open('dbstring.txt') as f:
-        string = f.readlines()
-    client = motor.motor_asyncio.AsyncIOMotorClient(string)
-    dataDB = client.data
+with open('config.json', 'r') as f:
+    config = json.load(f)
 
 
 async def get_prefix(client, message):
-    doc = await dataDB.prefixes.find_one({"id": str(message.guild.id)})
+    doc = await client.database.prefixes.find_one({"id": str(message.guild.id)})
     if doc is None:
         doc = {"prefix": "."}
 
     return commands.when_mentioned_or(doc["prefix"])(client, message)
 
 
-class CustomHelpCommand(commands.HelpCommand):
+# bot = commands.Bot(command_prefix=(get_prefix), owner_id=766373301169160242, intents=discord.Intents.all())
 
-    def __init__(self):
-        super().__init__()
+class MyBot(commands.Bot):
 
-    async def send_bot_help(self, mapping):
-        embed = discord.Embed(title='All Commands', color=discord.Color.blue())
-        cmdlist = ''
-        for cog in mapping:
-            try:
-                if cog.qualified_name != "Jishaku":
-                    for cmd in [command.name for command in mapping[cog]]:
-                        if cmdlist:
-                            cmdlist = f"{cmdlist}, {cmd}"
-                        else:
-                            cmdlist = cmd
-                    embed.add_field(name=cog.qualified_name, value=cmdlist)
-                    cmdlist = ''
-            except:
-                pass
-        embed.add_field(name='Type "help <command>" or "help <category>" for more information.', value='[Support Server](https://discord.com/invite/TsuZCbz5KD) | [Invite Me!](https://discord.com/oauth2/authorize?client_id=870379086487363605&permissions=8&scope=bot) | [Website](https://kidneybot.tk)', inline=False)
-        embed.set_footer(text=self.context.author,icon_url=self.context.author.avatar)
-        await self.context.send(embed=embed)
+    def __init__(self, command_prefix, owner_id, intents):
+        super().__init__(
+            command_prefix=command_prefix,
+            owner_id=owner_id,
+            intents=intents
+        )
+        import motor.motor_asyncio
+        client = motor.motor_asyncio.AsyncIOMotorClient(config['dbstring'])
+        self.database = client.data
+        self.config = config
 
-    async def send_cog_help(self, cog):
-        embed = discord.Embed(title=f'{cog.qualified_name} Commands', color=discord.Color.blue())
-        cmdlist = ''
-        for cmd in [command for command in cog.get_commands()]:
-            if cmdlist:
-                cmdlist = f"{cmdlist}\n{cmd.name} - {cmd.brief}"
-            else:
-                cmdlist = f"{cmd.name} - {cmd.brief}"
-        embed.add_field(name=cog.qualified_name, value=cmdlist)
-        embed.set_footer(text=self.context.author,icon_url=self.context.author.avatar)
-        await self.context.send(embed=embed)
+    async def setup_hook(self):
+        self.tree.copy_global_to(guild=discord.Object(id=785902346894311484))
+        await self.tree.sync(guild=discord.Object(id=785902346894311484))
+        self.tree.copy_global_to(guild=discord.Object(id=916332743481237524))
+        await self.tree.sync(guild=discord.Object(id=916332743481237524))
 
-    async def send_group_help(self, group):
-        await self.get_destination().send(f'{group.name}: {command.name for index, command in enumerate(group.commands)}')
-
-    async def send_command_help(self, command):
-        embed = discord.Embed(title=f'{get_prefix(None, self.context)}{command.name}', color=discord.Color.blue())
-        params = ''
-        for param in list(command.clean_params.keys()):
-            if not command.params[param].default:
-                if not params:
-                    params = f'({param})'
-                else:
-                    params = f'{params} ({param})'
-            else:
-                if not params:
-                    params = f'<{param}>'
-                else:
-                    params = f'{params} <{param}>'
-        aliases = ''
-        for alias in command.aliases:
-            if not aliases:
-                aliases = f'`{alias}`'
-            else:
-                aliases = f'{aliases}, `{alias}`'
-        paramdef = '<required>, (optional)\n\n' if params != '' else '\u2800'
-        aliasdef = f'\nAliases: {aliases}' if aliases != '' else '\u2800'
-        embed.add_field(name=f'{get_prefix(None, self.context)}{command.name} {params}', value=f'{paramdef}{command.help}{aliasdef}')
-        embed.set_footer(text=self.context.author,icon_url=self.context.author.avatar)
-        await self.context.send(embed=embed)
+    async def addcurrency(self, user: discord.User, value: int, location: str):
+        n = await self.database.currency.count_documents({"userID": str(user.id)})
+        if n == 1:
+            doc = await self.database.currency.find_one({"userID": str(user.id)})
+            if location == 'wallet':
+                await self.database.currency.update_one({'userID': str(user.id)},
+                                                        {'$set': {'wallet': str(int(doc['wallet']) + value)}})
+            elif location == 'bank':
+                await self.database.currency.update_one({'userID': str(user.id)},
+                                                        {'$set': {'bank': str(int(doc['bank']) + value)}})
+        else:
+            wallet, bank = (0, 0)
+            if location == 'wallet':
+                wallet = value
+            elif location == 'bank':
+                bank = value
+            await self.database.currency.insert_one({
+                "userID": str(user.id),
+                "wallet": str(wallet),
+                "bank": str(bank),
+                "inventory": []
+            })
 
 
-bot = commands.Bot(command_prefix=(get_prefix), owner_id=766373301169160242, intents=discord.Intents.all(), help_command=CustomHelpCommand())
-
+bot = MyBot(command_prefix=(get_prefix),
+            owner_id=766373301169160242,
+            intents=discord.Intents.all()
+            )
 
 statuses = ["with the fate of the world", "minecraft", ".help", ".prefix"]
 
@@ -115,17 +91,19 @@ async def status():
 @bot.listen('on_ready')
 async def on_ready():
     print(f'We have logged in as {bot.user}')
-        
+    print(bot.config)
+
 
 @bot.listen('on_guild_join')
 async def on_guild_join(guild):
-    n = await dataDB.serverbans.count_documents({"id": str(guild.id)})
+    n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
     if n > 0:
-        doc = await dataDB.serverbans.find_one({"id": str(guild.id)})
+        doc = await bot.database.serverbans.find_one({"id": str(guild.id)})
         embed = discord.Embed(title=f"{guild} is banned.",
                               description=f"Your server *{guild}* is banned from using **{bot.user.name}**.",
                               color=discord.Color.red())
-        embed.add_field(name=f"You can appeal by contacting __**{bot.get_user(766373301169160242)}**__.", value="\u2800")
+        embed.add_field(name=f"You can appeal by contacting __**{bot.get_user(766373301169160242)}**__.",
+                        value="\u2800")
         embed.add_field(name="Reason", value=f"```{doc['reason']}```")
         embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
         await guild.owner.send(embed=embed)
@@ -134,8 +112,8 @@ async def on_guild_join(guild):
 
 @bot.listen('on_guild_remove')
 async def on_guild_remove(guild):
-    await dataDB.bans.remove_many({"serverID": str(guild.ID)})
-    await dataDB.prefixes.remove_many({"id": str(guild.ID)})
+    await bot.database.bans.remove_many({"serverID": str(guild.ID)})
+    await bot.database.prefixes.remove_many({"id": str(guild.ID)})
 
 
 @bot.listen('on_message')
@@ -145,47 +123,56 @@ async def on_message(message):
         await message.reply(f'My prefix in this guild is: `{prefix}`')
 
 
-@bot.command()
-@commands.is_owner()
-async def load(ctx, extension):
+@app_commands.command(name="load")
+@PermissionsChecks.is_owner()
+async def load(interaction: discord.Interaction, extension: str):
     try:
         await bot.load_extension(f'cogs.{extension}')
-        await ctx.message.reply(f'Loaded cog {extension}')
+        await interaction.response.send_message(f'Loaded cog {extension}')
     except Exception as e:
-        await ctx.message.reply(f'Could not load cog {extension}\n`{e}`')
+        await interaction.response.send_message(f'Could not load cog {extension}\n`{e}`')
 
 
-@bot.command()
-@commands.is_owner()
-async def unload(ctx, extension):
+@app_commands.command(name="unload")
+@PermissionsChecks.is_owner()
+async def unload(interaction: discord.Interaction, extension: str):
     try:
         await bot.unload_extension(f'cogs.{extension}')
-        await ctx.message.reply(f'Unlodaded cog {extension}')
+        await interaction.response.send_message(f'Unlodaded cog {extension}')
     except Exception as e:
-        await ctx.message.reply(f'Could not unload cog {extension}\n`{e}`')
+        await interaction.response.send_message(f'Could not unload cog {extension}\n`{e}`')
 
 
-@bot.command()
-@commands.is_owner()
-async def reload(ctx, extension):
+@app_commands.command(name="reload")
+@PermissionsChecks.is_owner()
+async def reload(interaction: discord.Interaction, extension: str):
     try:
         await bot.unload_extension(f'cogs.{extension}')
-        await ctx.message.reply(f'Unlodaded cog {extension}')
     except Exception as e:
-        await ctx.message.reply(f'Could not unload cog {extension}\n`{e}`')
+        await interaction.response.send_message(f'Could not unload cog {extension}\n`{e}`')
     try:
         await bot.load_extension(f'cogs.{extension}')
-        await ctx.message.reply(f'Loaded cog {extension}')
+        await interaction.response.send_message(f'Reloaded cog {extension}')
     except Exception as e:
-        await ctx.message.reply(f'Could not load cog {extension}\n`{e}`')
+        await interaction.response.send_message(f'Could not load cog {extension}\n`{e}`')
 
 
-@bot.command()
-@commands.is_owner()
-async def say(ctx, *, text):
-    if ctx.author.id == 766373301169160242:
-        await ctx.message.delete()
-        await ctx.channel.send(text)
+@app_commands.command(name="say")
+@PermissionsChecks.is_owner()
+async def say(interaction: discord.Interaction, *, text: str):
+    await interaction.channel.send(text)
+
+
+@app_commands.command(name="reply")
+@PermissionsChecks.is_owner()
+async def reply(interaction: discord.Interaction, message: int, *, text: str):
+    await interaction.channel.fetch_message(message).reply(text)
+
+
+@app_commands.command(name='react')
+@PermissionsChecks.is_owner()
+async def react(interaction: discord.Interaction, message: int, reaction: str):
+    await interaction.channel.fetch_message(message).add_reaction(reaction)
 
 
 @bot.listen('on_command_error')
@@ -193,7 +180,7 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.BadArgument) or isinstance(error, commands.MissingRequiredArgument):
         await ctx.channel.send(error)
     elif isinstance(error, commands.MissingPermissions):
-        await ctx.channel.send( f"You don't have permission to use that command!")
+        await ctx.channel.send(f"You don't have permission to use that command!")
     elif isinstance(error, commands.CommandNotFound):
         await ctx.message.add_reaction(r'<:no_command:955591041032007740>')
     elif isinstance(error, commands.CommandOnCooldown):
@@ -211,92 +198,96 @@ async def on_command_error(ctx, error):
             else:
                 formattedTB = f'{formattedTB}{i}'
         embed = discord.Embed(title='Oops! I had a problem.', color=discord.Color.red())
-        embed.add_field(name='Please send this error to the developer along with the command you ran.', value=formattedTB)
+        embed.add_field(name='Please send this error to the developer along with the command you ran.',
+                        value=formattedTB)
         try:
             await ctx.send(embed=embed)
         except:
-            await ctx.send(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}')
+            try:
+                await ctx.send(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}')
+            except:
+                print(formattedTB)
 
-@bot.command()
-@commands.is_owner()
-async def announce(ctx, *, message):
-    await ctx.send(f'Sent global message\n```{message}```')
+
+@app_commands.command()
+@PermissionsChecks.is_owner()
+async def announce(interaction: discord.Interaction, *, message: str):
+    await interaction.response.send_message(f'Sent global message\n```{message}```', ephemeral=True)
     ids = []
     for guild in bot.guilds:
         if int(guild.owner_id) not in ids:
-            await guild.owner.send(f'Message from the dev!\n```{message}```(you are receiving this, because you own a server with this bot)')
+            await guild.owner.send(
+                f'Message from the dev!\n```{message}```(you are receiving this, because you own a server with this bot)')
             ids.append(int(guild.owner_id))
 
 
-
-@bot.command()
-@commands.is_owner()
-async def raiseexception(ctx):
+@app_commands.command()
+@PermissionsChecks.is_owner()
+async def raiseexception(interaction: discord.Interaction):
     raise Exception('artificial exception raised')
 
-@bot.command()
-@commands.is_owner()
-async def serverban(ctx, guild: discord.Guild, *, text):
-    if ctx.message.author.id == 766373301169160242:
-        n = await dataDB.serverbans.count_documents({"id": str(guild.id)})
-        if n > 0:
-            await ctx.reply("Server already banned!")
-            return
-        doc = {
-            "id": str(guild.id),
-            "name": str(guild),
-            "owner": str(guild.owner),
-            "reason": str(text)
-        }
-        embed = discord.Embed(title=f"{guild} has been banned.", description=f"Your server *{guild}* has been banned from using **{bot.user.name}**.", color=discord.Color.red())
-        embed.add_field(name=f"You can appeal by contacting __**{ctx.message.author}**__.", value="\u2800")
-        embed.add_field(name="Reason", value=f"```{text}```")
-        embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
-        await guild.owner.send(embed=embed)
-        """serverbandic[guild.id] = {
-            "name": str(guild),
-            "owner": str(guild.owner),
-            "reason": text
-        }
-        with open("serverbans.json", "w") as file:
-            json.dump(serverbandic, file)"""
-        await ctx.message.reply(f"Server *{guild}* has been permanently blacklisted from using **{bot.user.name}**")
-        dataDB.serverbans.insert_one(doc)
-        await guild.leave()
+
+@app_commands.command()
+@PermissionsChecks.is_owner()
+async def serverban(interaction: discord.Interaction, guild: int, *, text: str):
+    guild = bot.get_guild(guild)
+    n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
+    if n > 0:
+        await interaction.response.send_message("Server already banned!", ephemeral=True)
+        return
+    doc = {
+        "id": str(guild.id),
+        "name": str(guild),
+        "owner": str(guild.owner),
+        "reason": str(text)
+    }
+    embed = discord.Embed(title=f"{guild} has been banned.",
+                          description=f"Your server *{guild}* has been banned from using **{bot.user.name}**.",
+                          color=discord.Color.red())
+    embed.add_field(name=f"You can appeal by contacting __**{interaction.user}**__.", value="\u2800")
+    embed.add_field(name="Reason", value=f"```{text}```")
+    embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
+    await guild.owner.send(embed=embed)
+    """serverbandic[guild.id] = {
+        "name": str(guild),
+        "owner": str(guild.owner),
+        "reason": text
+    }
+    with open("serverbans.json", "w") as file:
+        json.dump(serverbandic, file)"""
+    await interaction.response.send_message(
+        f"Server *{guild}* has been permanently blacklisted from using **{bot.user.name}**")
+    bot.database.serverbans.insert_one(doc)
+    await guild.leave()
 
 
-@bot.command()
-@commands.is_owner()
-async def serverunban(ctx, guild):
-    if ctx.message.author.id == 766373301169160242:
-        n = await dataDB.serverbans.count_documents({"id": str(guild)})
-        if n == 0:
-            await ctx.reply("Server not banned!")
-            return
-        await dataDB.serverbans.delete_one({"id": str(guild)})
-        await ctx.message.reply(f"Server *{guild}* has been unbanned from using **{bot.user.name}**")
+@app_commands.command()
+@PermissionsChecks.is_owner()
+async def serverunban(interaction: discord.Interaction, guild: str):
+    n = await bot.database.serverbans.count_documents({"id": str(guild)})
+    if n == 0:
+        await interaction.response.send_message("Server not banned!")
+        return
+    await bot.database.serverbans.delete_one({"id": str(guild)})
+    await interaction.response.send_message(f"Server *{guild}* has been unbanned from using **{bot.user.name}**")
 
 
+@app_commands.command()
+@PermissionsChecks.is_owner()
+async def createinvite(interaction: discord.Interaction, guild: int):
+    guild = bot.get_guild(guild)
+    inv = 'error'
+    for i in guild.text_channels:
+        try:
+            inv = await i.create_invite(max_uses=1, reason='bot developer requested server invite.')
+            break
+        except:
+            pass
+    await interaction.response.send_message(inv)
 
-
-
-@bot.command()
-@commands.is_owner()
-async def createinvite(ctx, guild: discord.Guild):
-    if ctx.message.author.id == 766373301169160242:
-        inv = 'error'
-        for i in guild.text_channels:
-            try:
-                inv = await i.create_invite(max_uses=1,reason='bot developer requested server invite.')
-                break
-            except:
-                pass
-        await ctx.message.reply(inv)
 
 async def main():
     async with bot:
-        initdb()
-
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
                 await bot.load_extension(f'cogs.{filename[:-3]}')
@@ -305,9 +296,7 @@ async def main():
 
         asyncio.create_task(status())
 
-        with open('token.txt') as f:
-            lines = f.readlines()
+        await bot.start(config['token'])
 
-        await bot.start(str(lines[0]))
 
 asyncio.run(main())
