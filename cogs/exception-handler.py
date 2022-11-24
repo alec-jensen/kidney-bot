@@ -50,6 +50,10 @@ class ExceptionHandler(commands.Cog):
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(f'Slow down! Try again in **{error.retry_after:.2f} seconds**', ephemeral=True)
+        elif isinstance(error, app_commands.MissingPermissions):
+            await interaction.response.send_message('You don\'t have permission to run that command!')
+        elif isinstance(error, asyncio.exceptions.TimeoutError):
+            await interaction.channel.send('Time is up!')
         else:
             tb = traceback.format_exception(type(error), error, error.__traceback__)
             formattedTB = '```'

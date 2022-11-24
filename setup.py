@@ -28,45 +28,29 @@ if not dbOnly:
                 continue
 
 dbstring = input('Please paste the database access string EXACTLY as it appears in mongodb.\n> ')
-print('Setting up database...')
-client = motor.motor_asyncio.AsyncIOMotorClient(dbstring)
-dataDB = client.data
-bansDB = client.bans
-currencyDB = client.currency
-prefixDB = client.prefixes
-serverbansDB = client.serverbans
-print('Database set up. If the database doesn\'t have any changes, re-run this script with the -db flag')
 ownerid = input('Please paste your Discord user ID.\n> ')
 
-if dbOnly:
-    with open('config.json', 'w+') as f:
-        conf = json.load(f)
-        conf['dbstring'] = dbstring
-else:
-    print('Generating config file...')
-    with open('config.json', 'w+') as f:
-        f.write('{}')
-        conf = json.load(f)
-        conf['token'] = token
-        conf['dbstring'] = dbstring
-        conf['ownerid'] = ownerid
+print('Generating config file...')
+with open('config.json', 'w+') as f:
+    json.dump({'token': token, 'dbstring': dbstring, 'ownerid': ownerid}, f)
 
-    if not os.path.exists('venv'):
-        print('Please reinstall the venv correctly, as described in README.md')
-        exit()
+if not os.path.exists('venv'):
+    print('Please reinstall the venv correctly, as described in README.md')
+    exit()
 
-    try:
-        print('Checking if modules installed correctly...')
-        import discord
-        import aiohttp
-        import pafy
-        import psutil
-        import motor
-        import youtube_dl
-        import PyNaCl
-    except ImportError:
-        print('Some or all required modules are missing. You may not have run this script in the venv, otherwise please '
-              'install the required modules as described in README.md')
-        exit()
+try:
+    print('Checking if modules installed correctly...')
+    import discord
+    import aiohttp
+    import pafy
+    import psutil
+    import motor
+    import youtube_dl
+    import nacl
+except ImportError as error:
+    print('Some or all required modules are missing. You may not have run this script in the venv, otherwise please '
+          'install the required modules as described in README.md')
+    print(error)
+    exit()
 
 print('Setup finished successfully. You may now start the bot.')

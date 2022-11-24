@@ -10,9 +10,11 @@ Want to host the bot yourself? Follow these instructions:
 - Create a bot through the [discord developer portal](https://discord.com/developers/applications)
 - Create a [MongoDB Database](https://www.mongodb.com/)
 - Create a cluster in the database. It can have any name.
+- Create a user for the server. It can have any name and password.
 - Create a virtual environment `python3 -m venv venv`
 - Enter the virtual environment Linux/MacOS: `source venv/bin.active` Windows: `.\venv\Scripts\activate`
 - Install the required packages `python3 -m pip install -r requirements.txt`
+- Install special Pafy version `pip install git+https://github.com/Cupcakus/pafy`
 - Run the setup `python3 setup.py` Make sure to run this in the venv, and provide all requested information **EXACTLY**
 
 Start the bot with `python3 main.py`
