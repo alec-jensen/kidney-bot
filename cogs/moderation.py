@@ -45,6 +45,7 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='nickname', description="Change nicknames")
     @app_commands.checks.has_permissions(manage_nicknames=True)
+    @app_commands.default_permissions(manage_nicknames=True)
     async def nickname(self, interaction: discord.Interaction, user: discord.Member, *, newnick: str):
         if not self.permissionHierarchyCheck(interaction.user, user):
             interaction.response.send_message("You cannot moderate users higher than you", ephemeral=True)
@@ -58,6 +59,7 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='purge', description="Purge messages")
     @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.default_permissions(manage_messages=True)
     async def purge(self, interaction: discord.Interaction, limit: int, user: discord.Member = None):
         if not self.permissionHierarchyCheck(interaction.user, user):
             interaction.response.send_message("You cannot moderate users higher than you", ephemeral=True)
@@ -77,6 +79,7 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='mute', description="Mute users")
     @app_commands.checks.has_permissions(mute_members=True)
+    @app_commands.default_permissions(mute_members=True)
     async def mute(self, interaction: discord.Interaction, user: discord.Member, *, reason: str=None):
         if not self.permissionHierarchyCheck(interaction.user, user):
             interaction.response.send_message("You cannot moderate users higher than you", ephemeral=True)
@@ -87,6 +90,7 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='unmute', description="Unmute users")
     @app_commands.checks.has_permissions(mute_members=True)
+    @app_commands.default_permissions(mute_members=True)
     async def unmute(self, interaction: discord.Interaction, user: discord.Member):
         if not self.permissionHierarchyCheck(interaction.user, user):
             interaction.response.send_message("You cannot moderate users higher than you", ephemeral=True)
@@ -101,6 +105,7 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='tempmute', description="Timeout users")
     @commands.has_guild_permissions(mute_members=True)
+    @app_commands.default_permissions(mute_members=True)
     async def tempmute(self, interaction: discord.Interaction, user: discord.Member, time: str, *, reason: str=None):
         if not self.permissionHierarchyCheck(interaction.user, user):
             interaction.response.send_message("You cannot moderate users higher than you", ephemeral=True)

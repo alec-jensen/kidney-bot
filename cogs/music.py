@@ -232,6 +232,7 @@ class Music(commands.Cog):
 
     @app_commands.command(name='remove', description='Remove song from the queue')
     @app_commands.checks.has_permissions(manage_messages=True)
+    @app_commands.default_permissions(manage_messages=True)
     async def remove(self, interaction: discord.Interaction, index: int):
         if not await self.basic_checks(interaction):
             return
