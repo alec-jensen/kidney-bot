@@ -3,5 +3,3 @@ token.txt
 dbstring.txt
 .idea/
 config.json
-*.pyc
-cogs/__pycache__/

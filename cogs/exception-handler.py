@@ -48,8 +48,6 @@ class ExceptionHandler(commands.Cog):
                     print(formattedTB)
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        print('APP COMMAND ERROR')
-        print(type(error))
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(f'Slow down! Try again in **{error.retry_after:.2f} seconds**', ephemeral=True)
         else:

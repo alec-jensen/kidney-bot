@@ -32,7 +32,7 @@ class Other(commands.Cog):
     @app_commands.command(name='info', description='View info about the bot.')
     async def info(self, interaction: discord.Interaction):
         embed = discord.Embed(title='Info', color=discord.Color.blue())
-        embed.add_field(name='Developer: `kidney bean#2809`',
+        embed.add_field(name='kidney bot is a simple all purpose discord bot',
                         value='[Support Server](https://discord.com/invite/TsuZCbz5KD) | [Invite Me!](https://discord.com/oauth2/authorize?client_id=870379086487363605&permissions=8&scope=bot) | [Website](https://kidneybot.tk) | [GitHub](https://github.com/alec-jensen/kidney-bot)',
                         inline=False)
         embed.set_footer(text=interaction.user.name, icon_url=interaction.user.avatar.url)
