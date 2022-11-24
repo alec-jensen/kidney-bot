@@ -3,3 +3,4 @@ token.txt
 dbstring.txt
 .idea/
 config.json
+*.pyc
