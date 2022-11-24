@@ -97,6 +97,7 @@ class Economy(commands.Cog):
     @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
     async def rob(self, interaction: discord.Interaction, user: discord.User):
         await self.initUser(interaction.user)
+        await self.initUser(user)
         targetDoc = await self.bot.database.currency.find_one({'userID': str(user.id)})
         if int(targetDoc['wallet']) <= 11:
             await interaction.response.send_message('They have no beans!', ephemeral=True)
