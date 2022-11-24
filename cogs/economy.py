@@ -4,7 +4,7 @@
 
 import discord
 from discord.ext import commands
-import json
+from discord import app_commands
 import random
 
 """ currency data format:
@@ -17,44 +17,13 @@ import random
 """
 
 
-def initdb():
-    global dataDB
-    import motor.motor_asyncio
-    with open('dbstring.txt') as f:
-        string = f.readlines()
-    client = motor.motor_asyncio.AsyncIOMotorClient(string)
-    dataDB = client.data
-
-
-async def addcurrency(user: discord.User, value: int, location: str):
-    n = await dataDB.currency.count_documents({"userID": str(user.id)})
-    if n == 1:
-        doc = await dataDB.currency.find_one({"userID": str(user.id)})
-        if location == 'wallet':
-            await dataDB.currency.update_one({'userID': str(user.id)}, {'$set': {'wallet': str(int(doc['wallet']) + value)}})
-        elif location == 'bank':
-            await dataDB.currency.update_one({'userID': str(user.id)}, {'$set': {'bank': str(int(doc['bank']) + value)}})
-    else:
-        wallet, bank = (0, 0)
-        if location == 'wallet':
-            wallet = value
-        elif location == 'bank':
-            bank = value
-        await dataDB.currency.insert_one({
-            "userID": str(user.id),
-            "wallet": str(wallet),
-            "bank": str(bank),
-            "inventory": []
-        })
-
-
 class Economy(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
 
     async def initUser(self, user):
-        await addcurrency(user, 0, 'wallet')
+        await self.bot.addcurrency(user, 0, 'wallet')
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -63,92 +32,89 @@ class Economy(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def resetuser(self, ctx, user: discord.User):
-        await dataDB.currency.delete_one({'userID': str(user.id)})
+        await self.bot.database.currency.delete_one({'userID': str(user.id)})
         await ctx.send('User removed successfully!')
 
-    @commands.command(brief='Beg for beans', help='Imagine being that beanless lol. 30 second cooldown.')
-    @commands.cooldown(1, 6, commands.BucketType.user)
-    async def beg(self, ctx):
+    @app_commands.command(name="beg", description='Imagine being that beanless lol. 30 second cooldown.')
+    @app_commands.checks.cooldown(1, 6, key=lambda i: i.user.id)
+    async def beg(self, interaction: discord.Interaction):
         amount = random.randint(0, 100)
-        await addcurrency(ctx.author, amount, 'wallet')
-        await ctx.message.reply(f'You gained {amount} from begging!')
+        await self.bot.addcurrency(interaction.user, amount, 'wallet')
+        await interaction.response.send_message(f'You gained {amount} from begging!')
 
-    @commands.command(aliases=['bal'], brief='View your bean count',
-                      help='Admire how many (or how few) beans you have.')
-    async def balance(self, ctx, user: discord.User = None):
+    @app_commands.command(name="balance", description='View your bean count')
+    async def balance(self, interaction: discord.Interaction, user: discord.User = None):
         if not user:
-            user = ctx.author
+            user = interaction.user
         await self.initUser(user)
-        doc = await dataDB.currency.find_one({'userID': str(user.id)})
-        await ctx.reply(
+        doc = await self.bot.database.currency.find_one({'userID': str(user.id)})
+        await interaction.response.send_message(
             f"*{user.name}'s* balance:\n**Wallet: **{doc['wallet']} beans\n**Bank: **{doc['bank']} beans")
 
-    @commands.command(aliases=['dep'], brief='Deposit beans',
-                      help="Deposit beans in the bank so it doesn't get stolen.")
-    async def deposit(self, ctx, amount):
-        await self.initUser(ctx.author)
-        doc = await dataDB.currency.find_one({'userID': str(ctx.author.id)})
+    @app_commands.command(name="deposit", description='Deposit beans')
+    async def deposit(self, interaction: discord.Interaction, amount: str):
+        await self.initUser(interaction.user)
+        doc = await self.bot.database.currency.find_one({'userID': str(interaction.user.id)})
         try:
             int(amount)
         except:
             if amount.lower() == 'all':
                 amount = int(doc['wallet'])
             elif amount.lower() == 'half':
-                amount = int(doc['wallet']) / 2
+                amount = int(doc['wallet']) // 2
             else:
-                await ctx.reply('Value must be a number')
+                await interaction.response.send_message('Value must be a number, "all", or "half"', ephemeral=True)
                 return
         if int(amount) <= int(doc['wallet']):
-            await addcurrency(ctx.author, -int(amount), 'wallet')
-            await addcurrency(ctx.author, int(amount), 'bank')
-            await ctx.message.reply(f'Deposited {int(amount)} beans')
+            await self.bot.addcurrency(interaction.user, -int(amount), 'wallet')
+            await self.bot.addcurrency(interaction.user, int(amount), 'bank')
+            await interaction.response.send_message(f'Deposited {int(amount)} beans')
         else:
-            await ctx.message.reply('You are trying to deposit more beans than you have!')
+            await interaction.response.send_message('You are trying to deposit more beans than you have!', ephemeral=True)
 
-    @commands.command(aliases=['with'], brief='Withdraw beans', help='Withdraw beans so you can spend them.')
-    async def withdraw(self, ctx, amount):
-        await self.initUser(ctx.author)
-        doc = await dataDB.currency.find_one({'userID': str(ctx.author.id)})
+    @app_commands.command(name="withdraw", description="Withdraw beans")
+    async def withdraw(self, interaction: discord.Interaction, amount: str):
+        await self.initUser(interaction.user)
+        doc = await self.bot.database.currency.find_one({'userID': str(interaction.user.id)})
         try:
             int(amount)
         except:
             if amount.lower() == 'all':
                 amount = int(doc['bank'])
             elif amount.lower() == 'half':
-                amount = int(doc['bank']) / 2
+                amount = int(doc['bank']) // 2
             else:
-                await ctx.message.reply('Value must be a number')
+                await interaction.response.send_message('Value must be a number, "all", or "half"', ephemeral=True)
                 return
         if int(amount) <= int(doc['bank']):
-            await addcurrency(ctx.author, int(amount), 'wallet')
-            await addcurrency(ctx.author, -int(amount), 'bank')
-            await ctx.message.reply(f'Withdrew {amount} beans')
+            await self.bot.addcurrency(interaction.user, int(amount), 'wallet')
+            await self.bot.addcurrency(interaction.user, -int(amount), 'bank')
+            await interaction.response.send_message(f'Withdrew {amount} beans')
         else:
-            await ctx.message.reply('You are trying to withdraw more beans than you have!')
+            await interaction.response.send_message('You are trying to withdraw more beans than you have!', ephemeral=True)
 
-    @commands.command(brief='Rob someone',
-                      help='Rob someone of their beans and make then very mad. 30 second cooldown.')
-    @commands.cooldown(1, 30, commands.BucketType.user)
-    async def rob(self, ctx, user: discord.User):
-        await self.initUser(ctx.author)
-        targetDoc = await dataDB.currency.find_one({'userID': str(user.id)})
+    @app_commands.command(name='rob', description='Rob someone of their beans and make then very mad. 30 second cooldown.')
+    @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
+    async def rob(self, interaction: discord.Interaction, user: discord.User):
+        await self.initUser(interaction.user)
+        await self.initUser(user)
+        targetDoc = await self.bot.database.currency.find_one({'userID': str(user.id)})
         if int(targetDoc['wallet']) <= 11:
-            await ctx.reply('They have no beans!')
+            await interaction.response.send_message('They have no beans!', ephemeral=True)
         else:
-            doc = await dataDB.currency.find_one({'userID': str(ctx.author.id)})
+            doc = await self.bot.database.currency.find_one({'userID': str(interaction.user.id)})
             if int(doc['wallet']) <= 50:
-                await ctx.reply('You don\'t have enough money!')
+                await interaction.response.send_message('You don\'t have enough money!', ephemeral=True)
                 return
             amount = random.randint(0, int(int(doc['wallet']) / 6))
             if amount < 2:
-                await ctx.reply('You were caught! You pay 50 beans in fines.')
-                await addcurrency(ctx.author, -50, 'wallet')
+                await interaction.response.send_message('You were caught! You pay 50 beans in fines.')
+                await self.bot.addcurrency(interaction.user, -50, 'wallet')
                 return
-            await addcurrency(user, -amount, 'wallet')
-            await addcurrency(ctx.author, amount, 'wallet')
-            await ctx.message.reply(f"Stole {amount} beans from {user.mention}")
+            await self.bot.addcurrency(user, -amount, 'wallet')
+            await self.bot.addcurrency(interaction.user, amount, 'wallet')
+            await interaction.response.send_message(f"Stole {amount} beans from {user.mention}")
 
 
 async def setup(bot):
-    initdb()
     await bot.add_cog(Economy(bot))
