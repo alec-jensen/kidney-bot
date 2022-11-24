@@ -4,6 +4,7 @@
 
 import discord
 from discord.ext import commands
+from discord import  app_commands
 import psutil
 
 
@@ -16,22 +17,26 @@ class Other(commands.Cog):
     async def on_ready(self):
         print('Other cog loaded.')
 
-    @commands.command(brief='Invite the bot', help='Invite the bot with this command.')
-    async def invite(self, ctx):
-        await ctx.message.reply(f"Invite the bot here! https://discord.com/api/oauth2/authorize?client_id=870379086487363605&permissions=8&scope=bot")
+    @app_commands.command(name='invite', description='Invite the bot to your own server')
+    async def invite(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"Invite the bot here! https://discord.com/api/oauth2/authorize?client_id=870379086487363605&permissions=8&scope=bot")
 
-    @commands.command(brief='View resource usage',
-                      help='View the bots usage of resources. Really only useful for the dev.')
-    async def devstats(self, ctx):
-        await ctx.channel.send(f'ping: **{round(self.bot.latency * 1000)} ms\r**cpu:** {psutil.cpu_percent()}%\r**ram:** {psutil.virtual_memory().percent}%\r**disk:** {psutil.disk_usage("/").percent}%**')
+    @app_commands.command(name='devstats', description='View the bot\'s usage of resources. Really only useful for the dev.')
+    async def devstats(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'ping: **{round(self.bot.latency * 1000)} ms\r**cpu:** {psutil.cpu_percent()}%\r**ram:** {psutil.virtual_memory().percent}%\r**disk:** {psutil.disk_usage("/").percent}%**', ephemeral=True)
 
-    @commands.command(brief='Get the ping', help='Get the current ping of the bot.')
-    async def ping(self, ctx):
-        await ctx.send(f"PONG! Latency: {round(self.bot.latency * 1000)} milliseconds")
+    @app_commands.command(name='ping', description='Get the current ping of the bot.')
+    async def ping(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f"PONG! Latency: {round(self.bot.latency * 1000)} milliseconds")
 
-    @commands.command(brief='View bot info', help='View info about the bot.')
-    async def info(self, ctx):
-        await ctx.message.reply('Check out the docs here: https://kidneybot.tk/\nJoin the support Discord here: https://discord.gg/TsuZCbz5KD\nDeveloper: `kidney bean#6938`')
+    @app_commands.command(name='info', description='View info about the bot.')
+    async def info(self, interaction: discord.Interaction):
+        embed = discord.Embed(title='Info', color=discord.Color.blue())
+        embed.add_field(name='Developer: `kidney bean#2809`',
+                        value='[Support Server](https://discord.com/invite/TsuZCbz5KD) | [Invite Me!](https://discord.com/oauth2/authorize?client_id=870379086487363605&permissions=8&scope=bot) | [Website](https://kidneybot.tk) | [GitHub](https://github.com/alec-jensen/kidney-bot)',
+                        inline=False)
+        embed.set_footer(text=interaction.user.name, icon_url=interaction.user.avatar.url)
+        await interaction.response.send_message(embed=embed)
 
 
 async def setup(bot):
