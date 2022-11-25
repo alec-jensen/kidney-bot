@@ -24,8 +24,6 @@ with open('config.json', 'r') as f:
     config = KidneyBotConfig(json.load(f))
 
 
-# bot = commands.Bot(command_prefix=(get_prefix), owner_id=766373301169160242, intents=discord.Intents.all())
-
 class MyBot(commands.Bot):
 
     def __init__(self, command_prefix, owner_id, intents):
@@ -40,10 +38,7 @@ class MyBot(commands.Bot):
         self.config = config
 
     async def setup_hook(self):
-        self.tree.copy_global_to(guild=discord.Object(id=785902346894311484))
-        await self.tree.sync(guild=discord.Object(id=785902346894311484))
-        self.tree.copy_global_to(guild=discord.Object(id=916332743481237524))
-        await self.tree.sync(guild=discord.Object(id=916332743481237524))
+        await self.tree.sync()
 
     async def addcurrency(self, user: discord.User, value: int, location: str):
         n = await self.database.currency.count_documents({"userID": str(user.id)})

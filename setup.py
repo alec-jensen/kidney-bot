@@ -4,7 +4,6 @@
 
 import os
 import json
-import motor.motor_asyncio
 import requests
 import sys
 
