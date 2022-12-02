@@ -24,7 +24,11 @@ with open('config.json', 'r') as f:
     config = KidneyBotConfig(json.load(f))
 
 
-# bot = commands.Bot(command_prefix=(get_prefix), owner_id=766373301169160242, intents=discord.Intents.all())
+class CustomHelpCommand(commands.HelpCommand):
+
+    def __init__(self):
+        super().__init__()
+
 
 class MyBot(commands.Bot):
 
@@ -40,10 +44,7 @@ class MyBot(commands.Bot):
         self.config = config
 
     async def setup_hook(self):
-        self.tree.copy_global_to(guild=discord.Object(id=785902346894311484))
-        await self.tree.sync(guild=discord.Object(id=785902346894311484))
-        self.tree.copy_global_to(guild=discord.Object(id=916332743481237524))
-        await self.tree.sync(guild=discord.Object(id=916332743481237524))
+        await self.tree.sync()
 
     async def addcurrency(self, user: discord.User, value: int, location: str):
         n = await self.database.currency.count_documents({"userID": str(user.id)})
@@ -69,7 +70,7 @@ class MyBot(commands.Bot):
             })
 
 
-bot = MyBot(command_prefix='kb.',
+bot = MyBot(command_prefix=commands.when_mentioned_or('kb.'),
             owner_id=config.owner_id,
             intents=discord.Intents.all()
             )
@@ -108,16 +109,18 @@ async def on_guild_join(guild):
 
 @bot.listen('on_guild_remove')
 async def on_guild_remove(guild):
-    await bot.database.bans.remove_many({"serverID": str(guild.ID)})
-    await bot.database.prefixes.remove_many({"id": str(guild.ID)})
+    await bot.database.bans.remove_many({"serverID": str(guild.id)})
+    await bot.database.prefixes.remove_many({"id": str(guild.id)})
 
 
 @bot.command()
 @commands.is_owner()
 async def load(ctx, extension: str):
     try:
+        os.rename(f'cogs/-{extension}.py', f'cogs/{extension}.py')
         await bot.load_extension(f'cogs.{extension}')
         await ctx.reply(f'Loaded cog {extension}')
+        print(f'{extension.capitalize()} cog loaded.')
     except Exception as e:
         await ctx.reply(f'Could not load cog {extension}\n`{e}`')
 
@@ -127,7 +130,9 @@ async def load(ctx, extension: str):
 async def unload(ctx, extension: str):
     try:
         await bot.unload_extension(f'cogs.{extension}')
+        os.rename(f'cogs/{extension}.py', f'cogs/-{extension}.py')
         await ctx.reply(f'Unlodaded cog {extension}')
+        print(f'{extension.capitalize()} cog unloaded.')
     except Exception as e:
         await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
 
@@ -149,14 +154,20 @@ async def reload(ctx, extension: str):
 @bot.command()
 @commands.is_owner()
 async def say(ctx, *, text: str):
-    await ctx.message.delete()
+    try:
+        await ctx.message.delete()
+    except:
+        pass
     await ctx.channel.send(text)
 
 
 @bot.command()
 @commands.is_owner()
 async def reply(ctx, message: str, *, text: str):
-    await ctx.message.delete()
+    try:
+        await ctx.message.delete()
+    except:
+        pass
     channel = ctx.channel
     message = await channel.fetch_message(int(message))
     await message.reply(text)
@@ -165,7 +176,10 @@ async def reply(ctx, message: str, *, text: str):
 @bot.command()
 @commands.is_owner()
 async def react(ctx, message: str, reaction: str):
-    await ctx.message.delete()
+    try:
+        await ctx.message.delete()
+    except:
+        pass
     channel = ctx.channel
     message = await channel.fetch_message(int(message))
     await message.add_reaction(reaction)
@@ -250,7 +264,8 @@ async def main():
     async with bot:
         for filename in os.listdir('./cogs'):
             if filename.endswith('.py'):
-                await bot.load_extension(f'cogs.{filename[:-3]}')
+                if not filename.startswith('-'):
+                    await bot.load_extension(f'cogs.{filename[:-3]}')
 
         await bot.load_extension('jishaku')
 

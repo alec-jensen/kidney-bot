@@ -15,13 +15,17 @@ class ExceptionHandler(commands.Cog):
         bot.tree.on_error = self.on_app_command_error
 
     @commands.Cog.listener()
+    async def on_ready(self):
+        print('Exception-handler cog loaded.')
+
+    @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error) -> None:
         if isinstance(error, commands.BadArgument) or isinstance(error, commands.MissingRequiredArgument):
-            await ctx.channel.send(error)
+            await ctx.channel.send(str(error))
         elif isinstance(error, commands.MissingPermissions):
             await ctx.channel.send(f"You don't have permission to use that command!")
         elif isinstance(error, commands.CommandNotFound):
-            await ctx.message.add_reaction(r'<:no_command:955591041032007740>')
+            pass
         elif isinstance(error, commands.CommandOnCooldown):
             await ctx.channel.send(f'Slow down! Try again in **{error.retry_after:.2f} seconds**')
         elif isinstance(error, commands.NotOwner):
@@ -51,7 +55,7 @@ class ExceptionHandler(commands.Cog):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(f'Slow down! Try again in **{error.retry_after:.2f} seconds**', ephemeral=True)
         elif isinstance(error, app_commands.MissingPermissions):
-            await interaction.response.send_message('You don\'t have permission to run that command!')
+            pass
         elif isinstance(error, asyncio.exceptions.TimeoutError):
             await interaction.channel.send('Time is up!')
         else:
