@@ -7,6 +7,7 @@ from discord.ext import commands
 from discord import app_commands
 import asyncio
 import traceback
+import logging
 
 
 class ExceptionHandler(commands.Cog):
@@ -16,7 +17,7 @@ class ExceptionHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('Exception-handler cog loaded.')
+        logging.info('Exception-handler cog loaded.')
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error) -> None:
@@ -49,7 +50,7 @@ class ExceptionHandler(commands.Cog):
                 try:
                     await ctx.send(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}')
                 except:
-                    print(formattedTB)
+                    logging.error(formattedTB)
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
@@ -75,7 +76,7 @@ class ExceptionHandler(commands.Cog):
                 try:
                     await interaction.response.send_message(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}', ephemeral=True)
                 except:
-                    print(formattedTB)
+                    logging.error(formattedTB)
 
 
 async def setup(bot: commands.Bot) -> None:

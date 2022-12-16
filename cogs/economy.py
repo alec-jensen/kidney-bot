@@ -7,6 +7,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import random
+import logging
 
 """ currency data format:
 {
@@ -53,7 +54,7 @@ class Economy(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('Economy cog loaded.')
+        logging.info('Economy cog loaded.')
 
     @commands.command()
     @commands.is_owner()
@@ -61,7 +62,7 @@ class Economy(commands.Cog):
         await self.bot.database.currency.delete_one({'userID': str(user.id)})
         await ctx.send('User removed successfully!')
 
-    @commands.commands()
+    @commands.command()
     @commands.is_owner()
     async def addmoney(self, ctx, user: discord.User, amount: int):
         await self.bot.addcurrency(user, amount, 'wallet')

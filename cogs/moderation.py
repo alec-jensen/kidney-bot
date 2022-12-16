@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from datetime import timedelta
+import logging
 
 
 time_convert = {
@@ -40,7 +41,7 @@ class Moderation(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('Moderation cog loaded.')
+        logging.info('Moderation cog loaded.')
 
     @app_commands.command(name='nickname', description="Change nicknames")
     @app_commands.default_permissions(manage_nicknames=True)

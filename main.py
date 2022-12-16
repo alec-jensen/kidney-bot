@@ -9,8 +9,29 @@ import asyncio
 import os
 import logging
 import json
+import datetime
+import sys
 
-logging.basicConfig(level=logging.WARNING)
+now = datetime.datetime.now()
+if not os.path.exists('logs'):
+    os.makedirs('logs')
+"""logging.basicConfig(filename=f'logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.txt',
+                    filemode='a',
+                    format="[%(asctime)s] [%(levelname)8s] --- %(message)s (%(name)s - %(filename)s:%(lineno)s)",
+                    datefmt='%H:%M:%S',
+                    level=logging.INFO)"""
+
+logFormatter = logging.Formatter("[%(asctime)s] [%(levelname)8s] --- %(message)s (%(name)s - %(filename)s:%(lineno)s)", '%H:%M:%S')
+rootLogger = logging.getLogger()
+rootLogger.setLevel(logging.INFO)
+
+fileHandler = logging.FileHandler(f'logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.txt')
+fileHandler.setFormatter(logFormatter)
+rootLogger.addHandler(fileHandler)
+
+consoleHandler = logging.StreamHandler()
+consoleHandler.setFormatter(logFormatter)
+rootLogger.addHandler(consoleHandler)
 
 
 class KidneyBotConfig:
@@ -18,16 +39,11 @@ class KidneyBotConfig:
         self.token = conf['token']
         self.dbstring = conf['dbstring']
         self.owner_id = int(conf['ownerid'])
+        self.report_channel = int(conf['report_channel'])
 
 
 with open('config.json', 'r') as f:
     config = KidneyBotConfig(json.load(f))
-
-
-class CustomHelpCommand(commands.HelpCommand):
-
-    def __init__(self):
-        super().__init__()
 
 
 class MyBot(commands.Bot):
@@ -88,7 +104,7 @@ async def status():
 
 @bot.listen('on_ready')
 async def on_ready():
-    print(f'We have logged in as {bot.user}')
+    logging.info(f'We have logged in as {bot.user}')
 
 
 @bot.listen('on_guild_join')
@@ -120,7 +136,7 @@ async def load(ctx, extension: str):
         os.rename(f'cogs/-{extension}.py', f'cogs/{extension}.py')
         await bot.load_extension(f'cogs.{extension}')
         await ctx.reply(f'Loaded cog {extension}')
-        print(f'{extension.capitalize()} cog loaded.')
+        logging.info(f'{extension.capitalize()} cog loaded.')
     except Exception as e:
         await ctx.reply(f'Could not load cog {extension}\n`{e}`')
 
@@ -132,7 +148,7 @@ async def unload(ctx, extension: str):
         await bot.unload_extension(f'cogs.{extension}')
         os.rename(f'cogs/{extension}.py', f'cogs/-{extension}.py')
         await ctx.reply(f'Unlodaded cog {extension}')
-        print(f'{extension.capitalize()} cog unloaded.')
+        logging.info(f'{extension.capitalize()} cog unloaded.')
     except Exception as e:
         await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
 
