@@ -1,0 +1,10 @@
+version: "3"
+
+services:
+    client:
+        image: nginx
+        ports:
+            - 200:80
+        volumes:
+            - ./utils/database-backup-util:./utils/database-backup-util
+            - .config.json:.config.json
