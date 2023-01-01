@@ -72,6 +72,9 @@ class Automod(commands.Cog):
         if interaction is None and enabled is None:
             await interaction.response.send_message(f'Invalid arguments. Please provide an enabled state.', ephemeral=True)
             return
+        if option is not None and value is None:
+            await interaction.response.send_message(f'Invalid arguments. Please provide a value.', ephemeral=True)
+            return
 
         if enabled is False:
             await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {'enabled': False}})
