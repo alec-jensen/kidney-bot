@@ -9,6 +9,7 @@ from discord import app_commands
 import youtube_dl
 import pafy
 import asyncio
+import logging
 
 queue = {}
 
@@ -20,7 +21,7 @@ class Music(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('Music cog loaded.')
+        logging.info('Music cog loaded.')
 
     async def basic_checks(self, interaction):
         if interaction.guild.voice_client is None:
@@ -193,16 +194,11 @@ class Music(commands.Cog):
             for reaction in poll_msg.reactions:
                 if reaction.emoji in [u"\u2705", u"\U0001F6AB"]:
                     async for user in reaction.users():
-                        print(user)
                         member = await interaction.guild.fetch_member(user.id)
                         if not user.bot and member.voice.channel.id == interaction.guild.voice_client.channel.id and member.id not in reacted:
                             votes[reaction.emoji] += 1
                             reacted.append(user.id)
             skip = False
-            print(votes)
-            print(votes[u"\u2705"])
-            print(votes[u"\u2705"])
-            print((votes[u"\u2705"] + votes[u"\U0001F6AB"]))
             if votes[u"\u2705"] > 0:
                 if votes[u"\U0001F6AB"] == 0 or votes[u"\u2705"] / (
                         votes[u"\u2705"] + votes[u"\U0001F6AB"]) > 0.5:  # 50% or higher

@@ -6,7 +6,8 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 from datetime import timedelta
-import PermissionsChecks
+import logging
+
 
 time_convert = {
     "s": 1,
@@ -24,6 +25,7 @@ class Moderation(commands.Cog):
         self.bot = bot
 
     async def permissionHierarchyCheck(self, user: discord.Member, target: discord.Member) -> bool:
+        logging.debug(f'Checking permission hierarchy for {user} and {target}.')
         if target.top_role >= user.top_role:
             if user.guild.owner == user:
                 return True
@@ -40,10 +42,9 @@ class Moderation(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('Moderation cog loaded.')
+        logging.info('Moderation cog loaded.')
 
     @app_commands.command(name='nickname', description="Change nicknames")
-    @app_commands.checks.has_permissions(manage_nicknames=True)
     @app_commands.default_permissions(manage_nicknames=True)
     async def nickname(self, interaction: discord.Interaction, user: discord.Member, *, newnick: str):
         if not await self.permissionHierarchyCheck(interaction.user, user):
@@ -57,12 +58,8 @@ class Moderation(commands.Cog):
             await interaction.response.send_message('Nickname successfully changed!', ephemeral=True)
 
     @app_commands.command(name='purge', description="Purge messages")
-    @app_commands.checks.has_permissions(manage_messages=True)
     @app_commands.default_permissions(manage_messages=True)
     async def purge(self, interaction: discord.Interaction, limit: int, user: discord.Member = None):
-        if not await self.permissionHierarchyCheck(interaction.user, user):
-            interaction.response.send_message("You cannot moderate users higher than you", ephemeral=True)
-            return
         await interaction.response.defer(ephemeral=True)
         msg = []
         if not user:
@@ -77,7 +74,6 @@ class Moderation(commands.Cog):
         await interaction.followup.send('Messages purged.')
 
     @app_commands.command(name='mute', description="Mute users")
-    @app_commands.checks.has_permissions(mute_members=True)
     @app_commands.default_permissions(mute_members=True)
     async def mute(self, interaction: discord.Interaction, user: discord.Member, *, reason: str=None):
         if not await self.permissionHierarchyCheck(interaction.user, user):
@@ -88,7 +84,6 @@ class Moderation(commands.Cog):
         await interaction.channel.send(f'{user.mention} was muted.', delete_after=10)
 
     @app_commands.command(name='unmute', description="Unmute users")
-    @app_commands.checks.has_permissions(mute_members=True)
     @app_commands.default_permissions(mute_members=True)
     async def unmute(self, interaction: discord.Interaction, user: discord.Member):
         if not await self.permissionHierarchyCheck(interaction.user, user):
@@ -103,7 +98,6 @@ class Moderation(commands.Cog):
         await interaction.channel.send(f'{user.mention} was unmuted.', delete_after=10)
 
     @app_commands.command(name='tempmute', description="Timeout users")
-    @commands.has_guild_permissions(mute_members=True)
     @app_commands.default_permissions(mute_members=True)
     async def tempmute(self, interaction: discord.Interaction, user: discord.Member, time: str, *, reason: str=None):
         if not await self.permissionHierarchyCheck(interaction.user, user):

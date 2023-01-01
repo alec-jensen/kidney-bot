@@ -6,6 +6,7 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 import psutil
+import logging
 
 
 class Other(commands.Cog):
@@ -15,7 +16,7 @@ class Other(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('Other cog loaded.')
+        logging.info('Other cog loaded.')
 
     @app_commands.command(name='invite', description='Invite the bot to your own server')
     async def invite(self, interaction: discord.Interaction):
