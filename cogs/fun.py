@@ -7,6 +7,7 @@ from discord.ext import commands
 from discord import app_commands
 import random
 import aiohttp
+import logging
 
 
 class Fun(commands.Cog):
@@ -21,7 +22,7 @@ class Fun(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        print('Fun cog loaded.')
+        logging.info('Fun cog loaded.')
 
     @app_commands.command(name="yomama", description="get a yo mama joke")
     async def yomama(self, interaction: discord.Interaction):
