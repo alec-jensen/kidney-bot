@@ -11,6 +11,7 @@ import logging
 import json
 import datetime
 import sys
+import cogs.activeguard
 
 now = datetime.datetime.now()
 if not os.path.exists('logs'):
@@ -40,13 +41,14 @@ class KidneyBotConfig:
         self.dbstring = conf['dbstring']
         self.owner_id = int(conf['ownerid'])
         self.report_channel = int(conf['report_channel'])
+        self.perspective_api_key = conf.get('perspective_api_key')
 
 
 with open('config.json', 'r') as f:
     config = KidneyBotConfig(json.load(f))
 
 
-class MyBot(commands.Bot):
+class Bot(commands.Bot):
 
     def __init__(self, command_prefix, owner_id, intents):
         super().__init__(
@@ -61,6 +63,7 @@ class MyBot(commands.Bot):
 
     async def setup_hook(self):
         await self.tree.sync()
+        self.add_view(cogs.activeguard.ReportView())
 
     async def addcurrency(self, user: discord.User, value: int, location: str):
         n = await self.database.currency.count_documents({"userID": str(user.id)})
@@ -86,7 +89,7 @@ class MyBot(commands.Bot):
             })
 
 
-bot = MyBot(command_prefix=commands.when_mentioned_or('kb.'),
+bot = Bot(command_prefix=commands.when_mentioned_or('kb.'),
             owner_id=config.owner_id,
             intents=discord.Intents.all()
             )
@@ -163,6 +166,7 @@ async def reload(ctx, extension: str):
     try:
         await bot.load_extension(f'cogs.{extension}')
         await ctx.reply(f'Reloaded cog {extension}')
+        logging.info(f'Reloaded cog {extension}')
     except Exception as e:
         await ctx.reply(f'Could not load cog {extension}\n`{e}`')
 
