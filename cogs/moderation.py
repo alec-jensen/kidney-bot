@@ -25,6 +25,7 @@ class Moderation(commands.Cog):
         self.bot = bot
 
     async def permissionHierarchyCheck(self, user: discord.Member, target: discord.Member) -> bool:
+        logging.debug(f'Checking permission hierarchy for {user} and {target}.')
         if target.top_role >= user.top_role:
             if user.guild.owner == user:
                 return True
@@ -59,9 +60,6 @@ class Moderation(commands.Cog):
     @app_commands.command(name='purge', description="Purge messages")
     @app_commands.default_permissions(manage_messages=True)
     async def purge(self, interaction: discord.Interaction, limit: int, user: discord.Member = None):
-        if not await self.permissionHierarchyCheck(interaction.user, user):
-            interaction.response.send_message("You cannot moderate users higher than you", ephemeral=True)
-            return
         await interaction.response.defer(ephemeral=True)
         msg = []
         if not user:
