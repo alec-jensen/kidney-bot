@@ -96,6 +96,8 @@ class ActiveGuard(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
+        if message.channel.type is discord.ChannelType.private:
+            return
         member = await message.guild.fetch_member(message.author.id)
         doc = await self.bot.database.activeguardsettings.find_one({"guild": member.guild.id})
         if doc is not None and doc.get('block_known_spammers') is True:
