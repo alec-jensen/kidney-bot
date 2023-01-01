@@ -63,17 +63,17 @@ class Automod(commands.Cog):
 
     @auto_mod.command(name='ai', description='Manage AI automod settings. Recommended to set to 70-80% for best results.')
     async def automod(self, interaction: discord.Interaction, enabled: bool=None, option: Literal['TOXICITY', 'SEVERE_TOXICITY', 'IDENTITY_ATTACK', 'INSULT', 'PROFANITY', 'THREAT', 'FLIRTATION', 'OBSCENE', 'SPAM']=None, value: int=None):
-        if value < 0 or value > 100:
-            await interaction.response.send_message(f'Invalid value. Value must be between 0 and 100.', ephemeral=True)
-            return
-        if interaction is None and (option is None or value is None):
-            await interaction.response.send_message(f'Invalid arguments. Please provide an option and value.', ephemeral=True)
-            return
-        if interaction is None and enabled is None:
-            await interaction.response.send_message(f'Invalid arguments. Please provide an enabled state.', ephemeral=True)
-            return
         if option is not None and value is None:
             await interaction.response.send_message(f'Invalid arguments. Please provide a value.', ephemeral=True)
+            return
+        if option is not None and value is not None and value < 0 or value > 100:
+            await interaction.response.send_message(f'Invalid value. Value must be between 0 and 100.', ephemeral=True)
+            return
+        if enabled is None and (option is None or value is None):
+            await interaction.response.send_message(f'Invalid arguments. Please provide an option and value.', ephemeral=True)
+            return
+        if option is None and enabled is None and value is None:
+            await interaction.response.send_message(f'Invalid arguments. Please provide an enabled state, or an option and value.', ephemeral=True)
             return
 
         if enabled is False:
