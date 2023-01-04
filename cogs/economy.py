@@ -25,17 +25,20 @@ class UserProfile:
         self.database = database
         self.user = user
 
-    async def ainit(self):
+    async def async_init(self):
         await self.bot.addcurrency(self.user, 0, 'wallet')
 
     async def wallet(self) -> int:
-        return int(await self.database.currency.find_one({'userID': str(self.user.id)})['wallet'])
+        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
+        return int(doc['wallet'])
 
     async def bank(self) -> int:
-        return int(await self.database.currency.find_one({'userID': str(self.user.id)})['bank'])
+        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
+        return int(doc['bank'])
 
     async def inventory(self) -> list:
-        return list(await self.database.currency.find_one({'userID': str(self.user.id)})['inventory'])
+        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
+        return list(doc['inventory'])
 
     async def doc(self):
         return await self.database.currency.find_one({'userID': str(self.user.id)})
@@ -79,14 +82,14 @@ class Economy(commands.Cog):
         if not user:
             user = interaction.user
         profile = UserProfile(self.bot, self.bot.database, user)
-        await profile.ainit()
+        await profile.async_init()
         await interaction.response.send_message(
             f"*{user.name}'s* balance:\n**Wallet: **{await profile.wallet()} beans\n**Bank: **{await profile.bank()} beans")
 
     @app_commands.command(name="deposit", description='Deposit beans')
     async def deposit(self, interaction: discord.Interaction, amount: str):
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
-        await profile.ainit()
+        await profile.async_init()
         try:
             int(amount)
         except:
@@ -108,7 +111,7 @@ class Economy(commands.Cog):
     @app_commands.command(name="withdraw", description="Withdraw beans")
     async def withdraw(self, interaction: discord.Interaction, amount: str):
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
-        await profile.ainit()
+        await profile.async_init()
         try:
             int(amount)
         except:
@@ -132,10 +135,10 @@ class Economy(commands.Cog):
     @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
     async def rob(self, interaction: discord.Interaction, user: discord.User):
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
-        await profile.ainit()
-        tProfile = UserProfile(self.bot, self.bot.database, user)
-        await tProfile.ainit()
-        if int(await tProfile.wallet()) <= 11:
+        await profile.async_init()
+        target_profile = UserProfile(self.bot, self.bot.database, user)
+        await target_profile.async_init()
+        if int(await target_profile.wallet()) <= 11:
             await interaction.response.send_message('They have no beans!', ephemeral=True)
         else:
             if int(await profile.wallet()) <= 50:
@@ -146,7 +149,7 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('You were caught! You pay 50 beans in fines.')
                 await profile.addcurrency(-50, 'wallet')
                 return
-            await tProfile.addcurrency(-amount, 'wallet')
+            await target_profile.addcurrency(-amount, 'wallet')
             await profile.addcurrency(amount, 'wallet')
             await interaction.response.send_message(f"Stole {amount} beans from {user.mention}")
 

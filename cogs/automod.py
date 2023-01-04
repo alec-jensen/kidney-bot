@@ -13,18 +13,7 @@ class Automod(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-
-    async def log(self, action, reason, message):
-        doc = await self.bot.database.automodsettings.find_one({'guild': message.guild.id})
-        if doc is None:
-            return
-        if doc.get('log_channel') is None:
-            return
         
-        embed = discord.Embed(title=f'Automod: {action}', description=f'**User:** {message.author.mention}\n**Reason:** {reason}\n**Message:** ```{message.content}```', color=discord.Color.red())
-        embed.set_footer(text=f'User ID: {message.author.id}')
-        await self.bot.get_channel(doc['log_channel']).send(embed=embed)
-
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -53,7 +42,7 @@ class Automod(commands.Cog):
                         if int(float(value['summaryScore']['value'])*100) >= doc.get(key):
                             await message.delete()
                             await message.author.send(f'Your message ```{message.content}``` was deleted because it was detected that `{key} >= {doc.get(key)}`')
-                            await self.log('AI Detection', f'{key} >= {doc.get(key)}', message)
+                            await self.bot.log(message.guild, 'Automod', 'AI Detection', f'{key} >= {doc.get(key)}', user=message.author, message=message)
                             return
 
         

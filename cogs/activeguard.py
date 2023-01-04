@@ -105,6 +105,7 @@ class ActiveGuard(commands.Cog):
             if doc is not None:
                 await member.send(f'You have been banned from {member.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await member.ban(reason="User is on global blacklist.")
+                self.bot.log(message.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -114,6 +115,7 @@ class ActiveGuard(commands.Cog):
             if doc is not None:
                 await member.send(f'You have been banned from {member.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await member.ban(reason="User is on global blacklist.")
+                self.bot.log(member.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
 
     active_guard = app_commands.Group(name='activeguard', description='Manage ActiveGuard settings',
                                       default_permissions=discord.Permissions(manage_guild=True))

@@ -87,6 +87,20 @@ class Bot(commands.Bot):
                 "bank": str(bank),
                 "inventory": []
             })
+    
+    async def log(self, guild: discord.Guild, actiontype, action, reason, user: discord.User = None, message: discord.Message = None):
+        doc = await self.database.automodsettings.find_one({'guild': guild.id})
+        if doc is None:
+            return
+        if doc.get('log_channel') is None:
+            return
+        
+        embed = discord.Embed(title=f'{actiontype}: {action}',
+                              description=f'**User:** {user.name}#{user.discriminator}\n**Reason:** {reason}\n' +
+                              (f'**Message:** ```{message.content}```' if message is not None else ''),
+                              color=discord.Color.red())
+        embed.set_footer(text=f'User ID: {user.id}')
+        await self.get_channel(doc['log_channel']).send(embed=embed)
 
 
 bot = Bot(command_prefix=commands.when_mentioned_or('kb.'),
@@ -130,6 +144,12 @@ async def on_guild_join(guild):
 async def on_guild_remove(guild):
     await bot.database.bans.remove_many({"serverID": str(guild.id)})
     await bot.database.prefixes.remove_many({"id": str(guild.id)})
+
+
+@bot.command()
+@commands.is_owner()
+async def testLog(ctx, actiontype, action, reason, user: discord.User):
+    await bot.log(ctx.guild, actiontype, action, reason, user)
 
 
 @bot.command()
