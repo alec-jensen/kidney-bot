@@ -162,4 +162,4 @@ cython_debug/
 config.json
 logs/
 utils/database-backup-util/backup
-utils/database-backup-util/logs
+utils/database-backup-util/post-alert-url.txt
