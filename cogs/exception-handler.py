@@ -52,6 +52,8 @@ class ExceptionHandler(commands.Cog):
                 except:
                     logging.error(formattedTB)
 
+            logging.error(f'Prefix command: {ctx.command.name}; Arguments: {ctx.kwargs}; Error: {formattedTB.replace("`", "")}')
+
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(f'Slow down! Try again in **{error.retry_after:.2f} seconds**', ephemeral=True)
@@ -77,6 +79,8 @@ class ExceptionHandler(commands.Cog):
                     await interaction.response.send_message(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}', ephemeral=True)
                 except:
                     logging.error(formattedTB)
+            
+            logging.error(f'Application command: {interaction.command.name}; Arguments: {[param for param in interaction.namespace]}; Error: {formattedTB.replace("`", "")}')
 
 
 async def setup(bot: commands.Bot) -> None:
