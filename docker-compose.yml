@@ -4,4 +4,6 @@ services:
     client:
         image: kidneybot
         volumes:
-            - /app:/app
+            - ./logs:/app/logs
+            - ./config.json:/app/config.json
+            - ./database-backups:/app/utils/database-backup-util/backup
