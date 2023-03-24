@@ -1,5 +1,5 @@
 # Main file, initializes the bot.
-# Copyright (C) 2022  Alec Jensen
+# Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
 import discord
@@ -110,18 +110,22 @@ class Bot(commands.Bot):
                 "inventory": []
             })
     
-    async def log(self, guild: discord.Guild, actiontype, action, reason, user: discord.User = None, message: discord.Message = None):
+    async def log(self, guild: discord.Guild, actiontype: str, action: str, reason: str = None, user: discord.User = None, target: discord.User = None, message: discord.Message = None, color: discord.Color = None):
         doc = await self.database.automodsettings.find_one({'guild': guild.id})
         if doc is None:
             return
         if doc.get('log_channel') is None:
             return
+
+        color = discord.Color.red() if color is None else color
         
-        embed = discord.Embed(title=f'{actiontype}: {action}',
-                              description=f'**User:** {user.name}#{user.discriminator}\n**Reason:** {reason}\n' +
+        embed = discord.Embed(title=f'{actiontype}',
+                              description=f'{action}\n**User:** {user.mention} ({user.id})' + 
+                              (f"**Target:** {target.mention} ({target.id})" if target is not None else "") +
+                              (f"\n**Reason:** {reason}\n" if reason is not None else "") +
                               (f'**Message:** ```{message.content}```' if message is not None else ''),
-                              color=discord.Color.red())
-        embed.set_footer(text=f'User ID: {user.id}')
+                              color=color)
+        embed.set_footer(text=f'Automated logging by kidney bot')
         await self.get_channel(doc['log_channel']).send(embed=embed)
 
 

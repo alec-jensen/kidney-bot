@@ -1,5 +1,5 @@
 # This cog creates all automod commands
-# Copyright (C) 2022  Alec Jensen
+# Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
 import discord
@@ -42,7 +42,7 @@ class Automod(commands.Cog):
                         if int(float(value['summaryScore']['value'])*100) >= doc.get(key):
                             await message.delete()
                             await message.author.send(f'Your message ```{message.content}``` was deleted because it was detected that `{key} >= {doc.get(key)}`')
-                            await self.bot.log(message.guild, 'Automod', 'AI Detection', f'{key} >= {doc.get(key)}', user=message.author, message=message)
+                            await self.bot.log(message.guild, 'Automod', 'AI Detection', f'{key} >= {doc.get(key)}', user=message.guild.me, target=message.author, message=message)
                             return
 
         
@@ -52,6 +52,15 @@ class Automod(commands.Cog):
 
     @auto_mod.command(name='ai', description='Manage AI automod settings. Recommended to set to 70-80% for best results.')
     async def automod(self, interaction: discord.Interaction, enabled: bool=None, option: Literal['TOXICITY', 'SEVERE_TOXICITY', 'IDENTITY_ATTACK', 'INSULT', 'PROFANITY', 'THREAT', 'FLIRTATION', 'OBSCENE', 'SPAM']=None, value: int=None):
+        if enabled is False:
+            await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {'enabled': False}})
+            await interaction.response.send_message(f'AI Detection disabled.', ephemeral=True)
+            return
+        elif enabled is True:
+            await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {'enabled': True}})
+            await interaction.response.send_message(f'AI Detection enabled.', ephemeral=True)
+            return
+            
         if option is not None and value is None:
             await interaction.response.send_message(f'Invalid arguments. Please provide a value.', ephemeral=True)
             return
@@ -65,15 +74,6 @@ class Automod(commands.Cog):
             await interaction.response.send_message(f'Invalid arguments. Please provide an enabled state, or an option and value.', ephemeral=True)
             return
 
-        if enabled is False:
-            await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {'enabled': False}})
-            await interaction.response.send_message(f'AI Detection disabled.', ephemeral=True)
-            return
-        elif enabled is True:
-            await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {'enabled': True}})
-            await interaction.response.send_message(f'AI Detection enabled.', ephemeral=True)
-            return
-        
         if await self.bot.database.ai_detection.find_one({'guild': interaction.guild.id}) is not None:
             await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {option: value}})
         else:

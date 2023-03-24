@@ -1,5 +1,5 @@
 # This cog creates all moderation commands.
-# Copyright (C) 2022  Alec Jensen
+# Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
 import discord
