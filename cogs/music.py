@@ -74,7 +74,7 @@ class Music(commands.Cog):
             ctx.voice_client.source.volume = 0.3"""
 
     @app_commands.command(name='play', description='Play a song')
-    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
+    #@app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
     async def play(self, interaction: discord.Interaction, *, song: str):
         if not interaction.user.voice:
             await interaction.response.send_message('You must be connected to a voice channel to use this command!',
