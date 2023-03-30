@@ -131,7 +131,7 @@ class Economy(commands.Cog):
                                                     ephemeral=True)
 
     @app_commands.command(name='rob',
-                          description='Rob someone of their beans and make then very mad. 30 second cooldown.')
+                          description='Rob someone of their beans and make them very mad. 30 second cooldown.')
     @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
     async def rob(self, interaction: discord.Interaction, user: discord.User):
         profile = UserProfile(self.bot, self.bot.database, interaction.user)

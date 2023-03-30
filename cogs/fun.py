@@ -8,6 +8,11 @@ from discord import app_commands
 import random
 import aiohttp
 import logging
+import asyncio
+import pilcord
+from bill import insult
+import wikipedia
+from faker import Faker
 
 
 class Fun(commands.Cog):
@@ -24,6 +29,8 @@ class Fun(commands.Cog):
     async def on_ready(self):
         logging.info('Fun cog loaded.')
 
+                
+
     @app_commands.command(name="yomama", description="get a yo mama joke")
     async def yomama(self, interaction: discord.Interaction):
         async with aiohttp.ClientSession() as cs:
@@ -33,7 +40,6 @@ class Fun(commands.Cog):
 
     @app_commands.command(name="dadjoke", description="get dad joked")
     async def dadjoke(self, interaction: discord.Interaction):
-        #result = requests.get('https://icanhazdadjoke.com/', headers={"Accept": "application/json"}).json()
         async with aiohttp.ClientSession() as cs:
             async with cs.get('https://icanhazdadjoke.com/', headers={"Accept": "application/json"}) as r:
                 res = await r.json()
@@ -41,7 +47,6 @@ class Fun(commands.Cog):
 
     @app_commands.command(name="dog", description="dog pic")
     async def dog(self, interaction: discord.Interaction):
-        #result = requests.get('https://dog.ceo/api/breeds/image/random').json()
         async with aiohttp.ClientSession() as cs:
             async with cs.get('https://dog.ceo/api/breeds/image/random') as r:
                 res = await r.json()
@@ -49,7 +54,6 @@ class Fun(commands.Cog):
 
     @app_commands.command(name="duck", description="get a duck pic")
     async def duck(self, interaction: discord.Interaction):
-        #result = requests.get('https://random-d.uk/api/random').json()
         async with aiohttp.ClientSession() as cs:
             async with cs.get('https://random-d.uk/api/random') as r:
                 res = await r.json()
@@ -57,7 +61,6 @@ class Fun(commands.Cog):
 
     @app_commands.command(name="cat", description='cat pic')
     async def cat(self, interaction: discord.Interaction):
-        #result = requests.get('https://aws.random.cat/meow').json()
         async with aiohttp.ClientSession() as cs:
             async with cs.get('https://aws.random.cat/meow') as r:
                 res = await r.json()
@@ -65,15 +68,13 @@ class Fun(commands.Cog):
 
     @app_commands.command(name="meme", description="🤣")
     async def meme(self, interaction: discord.Interaction):
-        #result = requests.get('https://meme-api.herokuapp.com/gimme').json()
         async with aiohttp.ClientSession() as cs:
-            async with cs.get('https://meme-api.herokuapp.com/gimme') as r:
+            async with cs.get('https://meme-api.com/gimme') as r:
                 res = await r.json()
                 await interaction.response.send_message(res["url"])
 
     @app_commands.command(name="joke", description="its just a joke??")
     async def joke(self, interaction: discord.Interaction):
-        #result = requests.get('https://v2.jokeapi.dev/joke/Any').json()
         async with aiohttp.ClientSession() as cs:
             async with cs.get('https://v2.jokeapi.dev/joke/Any?blacklistFlags=nsfw,racist,sexist,explicit&type=single') as r:
                 res = await r.json()
@@ -117,6 +118,105 @@ class Fun(commands.Cog):
             await message.reply('I win!')
         elif outcome == 'D':
             await message.reply('Draw!')
+    
+    @app_commands.command(name='fight_under_this_flag', description='fight under this flag meme')
+    @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
+    async def fight_under_this_flag(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
+        if user is None and flag is None and flag_url is None:
+            image = interaction.user.avatar.url
+        elif user is not None and flag is None and flag_url is None:
+            image = user.avatar.url
+        elif user is None and flag is not None and flag_url is None:
+            image = flag.url
+        elif user is None and flag is None and flag_url is not None:
+            image = flag_url
+        else:
+            await interaction.response.send_message('Something went wrong, please try again', ephemeral=True)
+            return
+        await interaction.response.defer()
+        a = pilcord.Meme(avatar=image)
+        await interaction.followup.send(file=discord.File(await a.fight_under_this_flag(), filename='fight_under_this_flag.png'))
+    
+    @app_commands.command(name='uwu_discord', description='uwu discord meme')
+    @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
+    async def uwu_discord(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
+        if user is None and flag is None and flag_url is None:
+            image = interaction.user.avatar.url
+        elif user is not None and flag is None and flag_url is None:
+            image = user.avatar.url
+        elif user is None and flag is not None and flag_url is None:
+            image = flag.url
+        elif user is None and flag is None and flag_url is not None:
+            image = flag_url
+        else:
+            await interaction.response.send_message('Something went wrong, please try again', ephemeral=True)
+            return
+        await interaction.response.defer()
+        a = pilcord.Meme(avatar=image)
+        await interaction.followup.send(file=discord.File(await a.uwu_discord(), filename='uwu_discord.png'))
+    
+    @app_commands.command(name='rip', description='rip meme')
+    @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
+    async def rip(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
+        if user is None and flag is None and flag_url is None:
+            image = interaction.user.avatar.url
+        elif user is not None and flag is None and flag_url is None:
+            image = user.avatar.url
+        elif user is None and flag is not None and flag_url is None:
+            image = flag.url
+        elif user is None and flag is None and flag_url is not None:
+            image = flag_url
+        else:
+            await interaction.response.send_message('Something went wrong, please try again', ephemeral=True)
+            return
+        await interaction.response.defer()
+        a = pilcord.Meme(avatar=image)
+        await interaction.followup.send(file=discord.File(await a.rip(), filename='rip.png'))
+    
+    @app_commands.command(name='synonym', description='get a synonym')
+    async def synonym(self, interaction: discord.Interaction, word: str):
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get(f'https://api.datamuse.com/words?rel_syn={word}') as r:
+                res = await r.json()
+                words = []
+                for i in res:
+                    if len(words) < 10:
+                        words.append(i['word'])
+                    else: break
+                await interaction.response.send_message(f"Synonyms for {word}:\n{', '.join(words)}")
+    
+    @app_commands.command(name='antonym', description='get an antonym')
+    async def antonym(self, interaction: discord.Interaction, word: str):
+        async with aiohttp.ClientSession() as cs:
+            async with cs.get(f'https://api.datamuse.com/words?rel_ant={word}') as r:
+                res = await r.json()
+                words = []
+                for i in res:
+                    if len(words) < 10:
+                        words.append(i['word'])
+                    else: break
+                await interaction.response.send_message(f"Antonyms for {word}:\n{', '.join(words)}")
+    
+    @app_commands.command(name='shakespearean-insult', description='get a shakespearean insult')
+    async def shakespearean_insult(self, interaction: discord.Interaction):
+        await interaction.response.send_message(insult())
+    
+    @app_commands.command(name='wikipedia', description='get a wikipedia article')
+    async def wikipedia(self, interaction: discord.Interaction, query: str):
+        try:
+            await interaction.response.send_message(wikipedia.summary(query, sentences=2))
+        except wikipedia.exceptions.DisambiguationError as e:
+            options = []
+            for i in e.options:
+                if len(options) < 10:
+                    options.append(i)
+                else: break
+            await interaction.response.send_message(f"Could not determine what you meant, please be more specific. Here are some options:\n{', '.join(options)}", ephemeral=True)
+
+    @app_commands.command(name="fake-info", description="get fake info")
+    async def fake_info(self, interaction: discord.Interaction):
+        fake = Faker()
+        await interaction.response.send_message(f"{fake.name()}\n{fake.address()}")
 
 
 async def setup(bot):
