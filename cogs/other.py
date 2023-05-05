@@ -26,6 +26,10 @@ class Other(commands.Cog):
     async def devstats(self, interaction: discord.Interaction):
         await interaction.response.send_message(f'ping: **{round(self.bot.latency * 1000)} ms\r**cpu:** {psutil.cpu_percent()}%\r**ram:** {psutil.virtual_memory().percent}%\r**disk:** {psutil.disk_usage("/").percent}%**', ephemeral=True)
 
+    @app_commands.command(name='idk', description='Alec said IDK when I asked him what to make so I said kk and here it is')
+    async def idk(self, interaction: discord.Interaction):
+        await interaction.response.send_message(f'https:///prosurestring.github.io/alecidk.jpg.png', ephemeral=True)
+
     @app_commands.command(name='ping', description='Get the current ping of the bot.')
     async def ping(self, interaction: discord.Interaction):
         await interaction.response.send_message(f"PONG! Latency: {round(self.bot.latency * 1000)} milliseconds")
