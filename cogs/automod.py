@@ -80,6 +80,19 @@ class Automod(commands.Cog):
             await self.bot.database.ai_detection.insert_one({'guild': interaction.guild.id, option: value})
         
         await interaction.response.send_message(f'`{option}` set to `{value}`', ephemeral=True)
+    
+    @auto_mod.command(name='ai_overview', description='View AI automod settings')
+    async def automod_overview(self, interaction: discord.Interaction):
+        doc = await self.bot.database.ai_detection.find_one({'guild': interaction.guild.id})
+        if doc is None:
+            await interaction.response.send_message(f'AI Detection is disabled.', ephemeral=True)
+            return
+        embed = discord.Embed(title='AI Detection Overview', description='AI Detection is currently enabled. The following settings are set:', color=discord.Color.green())
+        for key, value in doc.items():
+            if key == '_id' or key == 'guild':
+                continue
+            embed.add_field(name=key, value=value, inline=True)
+        await interaction.response.send_message(embeds=[embed], ephemeral=True)
 
     @auto_mod.command(name='log', description='Set the log channel for automod')
     async def automod_log(self, interaction: discord.Interaction, channel: discord.TextChannel):

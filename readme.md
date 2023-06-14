@@ -28,6 +28,4 @@ Want to host the bot yourself? Follow these instructions:
 - Install the required packages `python3 -m pip install -r requirements.txt`
 - Run the setup `python3 setup.py` Make sure to run this in the venv, and provide all requested information **EXACTLY**
 
-Start the bot with `python3 main.py`
-
-todo: setup.py file to automatically ask for these then setup database.
+- Start the bot with `python3 main.py`
