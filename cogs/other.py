@@ -30,7 +30,7 @@ class Other(commands.Cog):
     async def idk(self, interaction: discord.Interaction):
         emb = discord.Embed()
         emb.set_image(url="https:///prosurestring.github.io/alecidk.jpg.png")
-        await interaction.response.send_message(embed=emb, ephemeral=True)
+        await interaction.response.send_message(embed=emb, ephemeral=True, color=0x313338)
 
     @app_commands.command(name='ping', description='Get the current ping of the bot.')
     async def ping(self, interaction: discord.Interaction):
