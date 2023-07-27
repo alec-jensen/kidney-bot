@@ -139,16 +139,6 @@ class ActiveGuard(commands.Cog):
                 await after.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await after.kick(reason="User is on global blacklist.")
                 await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
-    
-    @commands.Cog.listener()
-    async def on_presence_update(self, before: discord.Presence, after: discord.Presence):
-        doc = await self.bot.database.activeguardsettings.find_one({"guild_id": after.guild.id})
-        if doc is not None and doc.get('block_known_spammers') is True:
-            doc = await self.bot.database.scammer_list.find_one({"user": after.id})
-            if doc is not None:
-                await after.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
-                await after.kick(reason="User is on global blacklist.")
-                await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
