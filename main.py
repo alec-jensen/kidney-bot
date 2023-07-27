@@ -80,6 +80,7 @@ class Bot(commands.Bot):
         )
         import motor.motor_asyncio
         client = motor.motor_asyncio.AsyncIOMotorClient(config.dbstring)
+        logging.info(f'Connected to database.')
         self.database = client.data
         self.config = config
 
