@@ -147,7 +147,9 @@ async def status():
         currentstatus.name = currentstatus.name.replace("<users>", str(len(bot.users)))\
                                                 .replace("<servers>", str(len(bot.guilds)))
         await bot.change_presence(activity=currentstatus)
-        await asyncio.sleep(5)
+
+        await bot.get_guild(916332743481237524).get_channel(1135616583537020998).edit(name=f"Total Users: {len(bot.users)}")
+        await asyncio.sleep(10)
 
 
 @bot.listen('on_ready')
