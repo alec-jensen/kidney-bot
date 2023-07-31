@@ -7,3 +7,4 @@ services:
             - ./logs:/app/logs
             - ./config.json:/app/config.json
             - ./database-backups:/app/utils/database-backup-util/backup
+        restart: unless-stopped
