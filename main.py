@@ -130,20 +130,24 @@ class Bot(commands.Bot):
         await self.get_channel(doc['log_channel']).send(embed=embed)
 
 
-bot = Bot(command_prefix=commands.when_mentioned_or('kb.'),
+bot: Bot = Bot(command_prefix=commands.when_mentioned_or('kb.'),
             owner_id=config.owner_id,
             intents=discord.Intents.all()
             )
 
-statuses = ["with the fate of the world", "minecraft"]
+statuses = [discord.Game("with the fate of the world"), discord.Game("minecraft"), discord.Game("with <users> users"),
+            discord.Streaming(name="<servers> servers", url="https://kidneybot.alecj.tk"), discord.Game("/rockpaperscissors"),
+            discord.Game("counting to infinity... twice"), discord.Game("attempting to break the sound barrier... of silence")]
 
 
 async def status():
     await bot.wait_until_ready()
     while not bot.is_closed():
         currentstatus = random.choice(statuses)
-        await bot.change_presence(activity=discord.Game(name=currentstatus))
-        await asyncio.sleep(10)
+        currentstatus.name = currentstatus.name.replace("<users>", str(len(bot.users)))\
+                                                .replace("<servers>", str(len(bot.guilds)))
+        await bot.change_presence(activity=currentstatus)
+        await asyncio.sleep(5)
 
 
 @bot.listen('on_ready')
