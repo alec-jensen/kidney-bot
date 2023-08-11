@@ -8,7 +8,6 @@ from discord import app_commands
 import random
 import aiohttp
 import logging
-import asyncio
 import pilcord
 from bill import insult
 import wikipedia
@@ -122,17 +121,23 @@ class Fun(commands.Cog):
     @app_commands.command(name='fight_under_this_flag', description='fight under this flag meme')
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def fight_under_this_flag(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
+        # Count how many arguments are not None
+        num_arguments = sum(arg is not None for arg in [user, flag, flag_url])
+
+        # Check if only one argument is set
+        if num_arguments > 1:
+            await interaction.response.send_message('You must provide exactly one of the arguments: user, flag, or flag_url.', ephemeral=True)
+            return
+        
         if user is None and flag is None and flag_url is None:
             image = interaction.user.avatar.url
-        elif user is not None and flag is None and flag_url is None:
+        if user is not None:
             image = user.avatar.url
-        elif user is None and flag is not None and flag_url is None:
+        if flag is not None:
             image = flag.url
-        elif user is None and flag is None and flag_url is not None:
+        if flag_url is not None:
             image = flag_url
-        else:
-            await interaction.response.send_message('Something went wrong, please try again', ephemeral=True)
-            return
+
         await interaction.response.defer()
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.fight_under_this_flag(), filename='fight_under_this_flag.png'))

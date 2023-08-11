@@ -8,153 +8,68 @@ import random
 import asyncio
 import os
 import logging
-import json
 import datetime
-import sys
-import cogs.activeguard
+import time
+
+from _version import __version__
+from utils.kidney_bot import KidneyBot
+from utils.log_formatter import LogFormatter, LogFileFormatter
+
+start = time.perf_counter_ns()
+
+# Logging configuration
 
 now = datetime.datetime.now()
 if not os.path.exists('logs'):
     os.makedirs('logs')
-"""logging.basicConfig(filename=f'logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.txt',
-                    filemode='a',
-                    format="[%(asctime)s] [%(levelname)8s] --- %(message)s (%(name)s - %(filename)s:%(lineno)s)",
-                    datefmt='%H:%M:%S',
-                    level=logging.INFO)"""
 
-class CustomFormatter(logging.Formatter):
-
-    grey = "\x1b[38;20m"
-    yellow = "\x1b[33;20m"
-    red = "\x1b[31;20m"
-    bold_red = "\x1b[31;1m"
-    reset = "\x1b[0m"
-    format = "[%(asctime)s] [%(levelname)8s] --- %(message)s (%(name)s - %(filename)s:%(lineno)s)"
-
-    FORMATS = {
-        logging.DEBUG: grey + format + reset,
-        logging.INFO: grey + format + reset,
-        logging.WARNING: yellow + format + reset,
-        logging.ERROR: red + format + reset,
-        logging.CRITICAL: bold_red + format + reset
-    }
-
-    def format(self, record):
-        log_fmt = self.FORMATS.get(record.levelno)
-        formatter = logging.Formatter(log_fmt, '%H:%M:%S')
-        return formatter.format(record)
-
-logFormatter = CustomFormatter()
+logFormatter = LogFormatter()
 rootLogger = logging.getLogger()
 rootLogger.setLevel(logging.INFO)
-
-fileHandler = logging.FileHandler(f'logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.txt')
-fileHandler.setFormatter(logFormatter)
-rootLogger.addHandler(fileHandler)
 
 consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)
 rootLogger.addHandler(consoleHandler)
 
+logFileFormatter = LogFileFormatter()
+fileHandler = logging.FileHandler(
+    f'logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.log')
+fileHandler.setFormatter(logFileFormatter)
+rootLogger.addHandler(fileHandler)
 
-class KidneyBotConfig:
-    def __init__(self, conf):
-        self.token = conf['token']
-        self.dbstring = conf['dbstring']
-        self.owner_id = int(conf['ownerid'])
-        self.report_channel = int(conf['report_channel'])
-        self.perspective_api_key = conf.get('perspective_api_key')
+bot: KidneyBot = KidneyBot(
+    command_prefix=commands.when_mentioned_or('kb.'),
+    intents=discord.Intents.all()
+)
 
-
-with open('config.json', 'r') as f:
-    config = KidneyBotConfig(json.load(f))
-
-
-class Bot(commands.Bot):
-
-    def __init__(self, command_prefix, owner_id, intents):
-        super().__init__(
-            command_prefix=command_prefix,
-            owner_id=owner_id,
-            intents=intents
-        )
-        import motor.motor_asyncio
-        client = motor.motor_asyncio.AsyncIOMotorClient(config.dbstring)
-        logging.info(f'Connected to database.')
-        self.database = client.data
-        self.config = config
-
-    async def setup_hook(self):
-        await self.tree.sync()
-        self.add_view(cogs.activeguard.ReportView())
-
-    async def addcurrency(self, user: discord.User, value: int, location: str):
-        n = await self.database.currency.count_documents({"userID": str(user.id)})
-        if n == 1:
-            doc = await self.database.currency.find_one({"userID": str(user.id)})
-            if location == 'wallet':
-                await self.database.currency.update_one({'userID': str(user.id)},
-                                                        {'$set': {'wallet': str(int(doc['wallet']) + value)}})
-            elif location == 'bank':
-                await self.database.currency.update_one({'userID': str(user.id)},
-                                                        {'$set': {'bank': str(int(doc['bank']) + value)}})
-        else:
-            wallet, bank = (0, 0)
-            if location == 'wallet':
-                wallet = value
-            elif location == 'bank':
-                bank = value
-            await self.database.currency.insert_one({
-                "userID": str(user.id),
-                "wallet": str(wallet),
-                "bank": str(bank),
-                "inventory": []
-            })
-    
-    async def log(self, guild: discord.Guild, actiontype: str, action: str, reason: str = None, user: discord.User = None, target: discord.User = None, message: discord.Message = None, color: discord.Color = None):
-        doc = await self.database.automodsettings.find_one({'guild': guild.id})
-        if doc is None:
-            return
-        if doc.get('log_channel') is None:
-            return
-
-        color = discord.Color.red() if color is None else color
-        
-        embed = discord.Embed(title=f'{actiontype}',
-                              description=f'{action}\n**User:** {user.mention} ({user.id})' + 
-                              (f"**Target:** {target.mention} ({target.id})" if target is not None else "") +
-                              (f"\n**Reason:** {reason}\n" if reason is not None else "") +
-                              (f'**Message:** ```{message.content}```' if message is not None else ''),
-                              color=color)
-        embed.set_footer(text=f'Automated logging by kidney bot')
-        await self.get_channel(doc['log_channel']).send(embed=embed)
-
-
-bot: Bot = Bot(command_prefix=commands.when_mentioned_or('kb.'),
-            owner_id=config.owner_id,
-            intents=discord.Intents.all()
-            )
-
-statuses = [discord.Game("with the fate of the world"), discord.Game("minecraft"), discord.Game("with <users> users"),
-            discord.Streaming(name="<servers> servers", url="https://kidneybot.alecj.tk"), discord.Game("/rockpaperscissors"),
-            discord.Game("counting to infinity... twice"), discord.Game("attempting to break the sound barrier... of silence")]
+statuses: list[discord.Game] = [discord.Game("with the fate of the world"), discord.Game("minecraft"), discord.Game("with <users> users"),
+                                discord.Streaming(
+                                    name="<servers> servers", url="https://kidneybot.alecj.tk"), discord.Game("/rockpaperscissors"),
+                                discord.Game("counting to infinity... twice"), discord.Game("attempting to break the sound barrier... of silence")]
 
 
 async def status():
     await bot.wait_until_ready()
     while not bot.is_closed():
-        currentstatus = random.choice(statuses)
-        currentstatus.name = currentstatus.name.replace("<users>", str(len(bot.users)))\
-                                                .replace("<servers>", str(len(bot.guilds)))
-        await bot.change_presence(activity=currentstatus)
+        current_status: discord.Game = random.choice(statuses)
+        current_status.name = current_status.name.replace("<users>", str(len(bot.users)))\
+            .replace("<servers>", str(len(bot.guilds)))
+        await bot.change_presence(activity=current_status)
 
-        await bot.get_guild(916332743481237524).get_channel(1135616583537020998).edit(name=f"Total Users: {len(bot.users)}")
-        await asyncio.sleep(10)
+        await asyncio.sleep(16)
+
+async def user_count():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        await bot.get_channel(bot.config.user_count_channel).edit(name=f"Total Users: {len(bot.users)}")
+        await asyncio.sleep(360)
 
 
 @bot.listen('on_ready')
 async def on_ready():
-    logging.info(f'We have logged in as {bot.user}')
+    logging.info(f"Kidney Bot {__version__}")
+    logging.info(f"Ready in {(time.perf_counter_ns() - start) / 1e9} seconds.")
+    logging.info(f"Logged in as {bot.user} ({bot.user.id})")
 
 
 @bot.listen('on_guild_join')
@@ -171,12 +86,6 @@ async def on_guild_join(guild):
         embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
         await guild.owner.send(embed=embed)
         await guild.leave()
-
-
-@bot.listen('on_guild_remove')
-async def on_guild_remove(guild):
-    await bot.database.bans.remove_many({"serverID": str(guild.id)})
-    await bot.database.prefixes.remove_many({"id": str(guild.id)})
 
 
 @bot.command()
@@ -292,17 +201,11 @@ async def serverban(ctx, guild: discord.Guild, *, text: str):
     embed = discord.Embed(title=f"{guild} has been banned.",
                           description=f"Your server *{guild}* has been banned from using **{bot.user.name}**.",
                           color=discord.Color.red())
-    embed.add_field(name=f"You can appeal by contacting __**{ctx.message.author}**__.", value="\u2800")
+    embed.add_field(
+        name=f"You can appeal by contacting __**{ctx.message.author}**__.", value="\u2800")
     embed.add_field(name="Reason", value=f"```{text}```")
     embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
     await guild.owner.send(embed=embed)
-    """serverbandic[guild.id] = {
-        "name": str(guild),
-        "owner": str(guild.owner),
-        "reason": text
-    }
-    with open("serverbans.json", "w") as file:
-        json.dump(serverbandic, file)"""
     await ctx.reply(
         f"Server *{guild}* has been permanently blacklisted from using **{bot.user.name}**")
     bot.database.serverbans.insert_one(doc)
@@ -335,7 +238,7 @@ async def createinvite(ctx, guild: discord.Guild):
 
 async def main():
     async with bot:
-        for filename in os.listdir('./cogs'):
+        for filename in os.listdir(os.path.join(os.path.dirname(__file__), "cogs")):
             if filename.endswith('.py'):
                 if not filename.startswith('-'):
                     await bot.load_extension(f'cogs.{filename[:-3]}')
@@ -343,8 +246,13 @@ async def main():
         await bot.load_extension('jishaku')
 
         asyncio.create_task(status())
+        
+        if bot.config.user_count_channel is not None:
+            asyncio.create_task(user_count())
+        else:
+            logging.warning("No user count channel set, not counting users.")
 
-        await bot.start(config.token)
+        await bot.start(bot.config.token)
 
-
-asyncio.run(main())
+if __name__ == '__main__':
+    asyncio.run(main())

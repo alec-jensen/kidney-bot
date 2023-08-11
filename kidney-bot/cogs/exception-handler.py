@@ -34,14 +34,16 @@ class ExceptionHandler(commands.Cog):
         elif isinstance(error, asyncio.exceptions.TimeoutError):
             await ctx.reply('Time is up!')
         else:
-            tb = traceback.format_exception(type(error), error, error.__traceback__)
+            tb = traceback.format_exception(
+                type(error), error, error.__traceback__)
             formattedTB = '```'
             for i in tb:
                 if i == tb[-1]:
                     formattedTB = f'{formattedTB}{i}```'
                 else:
                     formattedTB = f'{formattedTB}{i}'
-            embed = discord.Embed(title='Oops! I had a problem.', color=discord.Color.red())
+            embed = discord.Embed(
+                title='Oops! I had a problem.', color=discord.Color.red())
             embed.add_field(name='Please send this error to the developer along with the command you ran.',
                             value=formattedTB)
             try:
@@ -52,7 +54,11 @@ class ExceptionHandler(commands.Cog):
                 except:
                     logging.error(formattedTB)
 
-            logging.error(f'Prefix command: {ctx.command.name}; Arguments: {ctx.kwargs}; Error: {formattedTB.replace("`", "")}')
+            logging.error(
+                f'Prefix command: {ctx.command.name}; Arguments: {ctx.kwargs}; Error: {formattedTB.replace("`", "")}')
+            if self.bot.config.error_channel:
+                await self.bot.get_channel(self.bot.config.error_channel)\
+                        .send(f'Prefix command: {ctx.command.name}; Arguments: {ctx.kwargs}; Error: {formattedTB.replace("`", "")}')
 
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
         if isinstance(error, app_commands.CommandOnCooldown):
@@ -62,14 +68,16 @@ class ExceptionHandler(commands.Cog):
         elif isinstance(error, asyncio.exceptions.TimeoutError):
             await interaction.channel.send('Time is up!')
         else:
-            tb = traceback.format_exception(type(error), error, error.__traceback__)
+            tb = traceback.format_exception(
+                type(error), error, error.__traceback__)
             formattedTB = '```'
             for i in tb:
                 if i == tb[-1]:
                     formattedTB = f'{formattedTB}{i}```'
                 else:
                     formattedTB = f'{formattedTB}{i}'
-            embed = discord.Embed(title='Oops! I had a problem.', color=discord.Color.red())
+            embed = discord.Embed(
+                title='Oops! I had a problem.', color=discord.Color.red())
             embed.add_field(name='Please send this error to the developer along with the command you ran.',
                             value=formattedTB)
             try:
@@ -79,8 +87,13 @@ class ExceptionHandler(commands.Cog):
                     await interaction.response.send_message(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}', ephemeral=True)
                 except:
                     logging.error(formattedTB)
-            
-            logging.error(f'Application command: {interaction.command.name}; Arguments: {[param for param in interaction.namespace]}; Error: {formattedTB.replace("`", "")}')
+
+            logging.error(f'Application command: {interaction.command.name}; Arguments: {[param for param in interaction.namespace]}; \
+                          Error: {formattedTB.replace("`", "")}')
+            if self.bot.config.error_channel:
+                await self.bot.get_channel(self.bot.config.error_channel)\
+                        .send(f'Application command: {interaction.command.name}; Arguments: {[param for param in interaction.namespace]}; \
+                              Error: {formattedTB.replace("`", "")}')
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -26,7 +26,7 @@ class UserProfile:
         self.user = user
 
     async def async_init(self):
-        await self.bot.addcurrency(self.user, 0, 'wallet')
+        await self.bot.add_currency(self.user, 0, 'wallet')
 
     async def wallet(self) -> int:
         doc = await self.database.currency.find_one({'userID': str(self.user.id)})
@@ -43,11 +43,11 @@ class UserProfile:
     async def doc(self):
         return await self.database.currency.find_one({'userID': str(self.user.id)})
 
-    async def addcurrency(self, amount: int, location: str):
+    async def add_currency(self, amount: int, location: str):
         location = location.lower()
         if location not in ['wallet', 'bank']:
             raise ValueError(f"Parameter \"location\" must be 'wallet' or 'bank' got: {location}")
-        await self.bot.addcurrency(self.user, amount, location)
+        await self.bot.add_currency(self.user, amount, location)
 
 
 class Economy(commands.Cog):
@@ -101,8 +101,8 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('Value must be a number, "all", or "half"', ephemeral=True)
                 return
         if int(amount) <= int(await profile.wallet()):
-            await profile.addcurrency(-int(amount), 'wallet')
-            await profile.addcurrency(int(amount), 'bank')
+            await profile.add_currency(-int(amount), 'wallet')
+            await profile.add_currency(int(amount), 'bank')
             await interaction.response.send_message(f'Deposited {int(amount)} beans')
         else:
             await interaction.response.send_message('You are trying to deposit more beans than you have!',
@@ -123,8 +123,8 @@ class Economy(commands.Cog):
                 await interaction.response.send_message('Value must be a number, "all", or "half"', ephemeral=True)
                 return
         if int(amount) <= int(await profile.bank()):
-            await profile.addcurrency(int(amount), 'wallet')
-            await profile.addcurrency(-int(amount), 'bank')
+            await profile.add_currency(int(amount), 'wallet')
+            await profile.add_currency(-int(amount), 'bank')
             await interaction.response.send_message(f'Withdrew {amount} beans')
         else:
             await interaction.response.send_message('You are trying to withdraw more beans than you have!',
@@ -147,10 +147,10 @@ class Economy(commands.Cog):
             amount = random.randint(0, int(await profile.wallet() // 6))
             if amount < 2:
                 await interaction.response.send_message('You were caught! You pay 50 beans in fines.')
-                await profile.addcurrency(-50, 'wallet')
+                await profile.add_currency(-50, 'wallet')
                 return
-            await target_profile.addcurrency(-amount, 'wallet')
-            await profile.addcurrency(amount, 'wallet')
+            await target_profile.add_currency(-amount, 'wallet')
+            await profile.add_currency(amount, 'wallet')
             await interaction.response.send_message(f"Stole {amount} beans from {user.mention}")
 
 

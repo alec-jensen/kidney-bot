@@ -13,6 +13,7 @@ from pymongo import MongoClient
 import bson
 from bson import json_util 
 import json
+import sys
 
 parser = argparse.ArgumentParser(prog='DatabaseRestoreTool', description='Restore your MongoDB database from a backup!', epilog='Written by Alec Jensen')
 
@@ -26,7 +27,7 @@ dir = os.path.realpath(os.path.dirname(__file__))
 
 if not os.path.exists(f'{dir}/backup/{args.backup_name}'):
     print('ERROR: Backup doesn\'t exist! check filename.')
-    exit()
+    sys.exit()
     
 directory = f'{dir}/backup/{args.backup_name}'
 

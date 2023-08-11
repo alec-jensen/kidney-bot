@@ -8,16 +8,19 @@ from discord import  app_commands
 import logging
 import aiohttp
 from typing import Literal
+from utils.kidney_bot import KidneyBot
 
 class Automod(commands.Cog):
 
     def __init__(self, bot):
-        self.bot = bot
+        self.bot: KidneyBot = bot
         
 
     @commands.Cog.listener()
     async def on_ready(self):
         logging.info('Automod cog loaded.')
+        if self.bot.config.perspective_api_key is None:
+            logging.warning('Perspective API key not set. AI detection will not work.')
 
 
     @commands.Cog.listener()
@@ -29,6 +32,9 @@ class Automod(commands.Cog):
             if message.author.bot:
                 return
         except AttributeError: return
+
+        if self.bot.config.perspective_api_key is None:
+            return
 
         headers = {"Content-Type": "application/json"}
         data = '{comment: {text: "' + message.content + '"}, languages: ["en"], requestedAttributes: {TOXICITY:{}, SEVERE_TOXICITY: {}, IDENTITY_ATTACK: {}, INSULT: {}, PROFANITY: {}, THREAT: {}, FLIRTATION: {}, OBSCENE: {}, SPAM: {}} }'
@@ -46,7 +52,6 @@ class Automod(commands.Cog):
                             return
 
         
-    
     auto_mod = app_commands.Group(name='automod', description='Manage Automod settings',
                                       default_permissions=discord.Permissions(manage_guild=True))
 
@@ -105,4 +110,7 @@ class Automod(commands.Cog):
 
 
 async def setup(bot):
-    await bot.add_cog(Automod(bot))
+    automod = Automod(bot)
+    if bot.config.perspective_api_key is None:
+        automod.auto_mod = None
+    await bot.add_cog(automod)

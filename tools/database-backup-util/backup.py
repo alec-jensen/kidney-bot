@@ -60,7 +60,6 @@ try:
         pass
 
 except Exception as e:
-    e = None if e == '' else e
     tb = traceback.format_exception(type(e), e, e.__traceback__)
     formattedTB = '"'
     for i in tb:
