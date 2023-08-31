@@ -68,13 +68,13 @@ class Economy(commands.Cog):
     @commands.command()
     @commands.is_owner()
     async def addmoney(self, ctx, user: discord.User, amount: int):
-        await self.bot.addcurrency(user, amount, 'wallet')
+        await self.bot.add_currency(user, amount, 'wallet')
 
     @app_commands.command(name="beg", description='Imagine being that beanless lol. 30 second cooldown.')
     @app_commands.checks.cooldown(1, 6, key=lambda i: i.user.id)
     async def beg(self, interaction: discord.Interaction):
         amount = random.randint(0, 100)
-        await self.bot.addcurrency(interaction.user, amount, 'wallet')
+        await self.bot.add_currency(interaction.user, amount, 'wallet')
         await interaction.response.send_message(f'You gained {amount} from begging!')
 
     @app_commands.command(name="balance", description='View your bean count')
