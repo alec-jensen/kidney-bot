@@ -164,3 +164,4 @@ logs/
 utils/database-backup-util/backup
 utils/database-backup-util/post-alert-url.txt
 .vscode
+!.vscode/launch.json
