@@ -60,3 +60,7 @@ class Database:
     @property
     def serverbans(self) -> Collection:
         return Collection(self.database.serverbans)
+    
+    @property
+    def autorole_settings(self) -> Collection:
+        return Collection(self.database.autorole_settings)

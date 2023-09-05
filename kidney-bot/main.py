@@ -125,12 +125,16 @@ async def reload(ctx, extension: str):
         await bot.unload_extension(f'cogs.{extension}')
     except Exception as e:
         await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
+        return
+    
     try:
         await bot.load_extension(f'cogs.{extension}')
-        await ctx.reply(f'Reloaded cog {extension}')
-        logging.info(f'Reloaded cog {extension}')
     except Exception as e:
         await ctx.reply(f'Could not load cog {extension}\n`{e}`')
+        return
+
+    await ctx.reply(f'Reloaded cog {extension}')
+    logging.info(f'Reloaded cog {extension}')
 
 
 @bot.command()
