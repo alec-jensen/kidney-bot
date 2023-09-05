@@ -1,7 +1,8 @@
 import discord
 from discord.ext import commands, tasks
-from discord import Role, Role, Role, role, role, role, app_commands
+from discord import app_commands
 import logging
+from typing import Literal
 
 from utils.kidney_bot import KidneyBot
 
@@ -22,11 +23,17 @@ class Autorole(commands.Cog):
                 continue
             for role in doc.get('roles', []):
                 discord_role = guild.get_role(role['id'])
+
                 if discord_role is None:
                     continue
+
                 for member in guild.members:
                     if discord_role in member.roles:
                         continue
+
+                    if member.bot and not doc.get('BotsGetRoles', False):
+                        continue
+                    
                     if (member.joined_at.timestamp() + role['delay']) <= discord.utils.utcnow().timestamp():
                         await member.add_roles(discord_role)
 
@@ -46,6 +53,9 @@ class Autorole(commands.Cog):
                 continue
 
             if role.get('delay') > 0:
+                continue
+
+            if member.bot and not doc.get('BotsGetRoles', False):
                 continue
 
             await member.add_roles(discord_role)
@@ -135,6 +145,24 @@ class Autorole(commands.Cog):
             role_names.append(f'{role.mention}' + (f' (delay: {role_dict["delay"]} seconds)' if role_dict['delay'] > 0 else ''))
         
         await interaction.response.send_message('\n'.join(role_names), ephemeral=True)
+
+        for role in doc.get('roles', []):
+            discord_role = interaction.guild.get_role(role['id'])
+            if discord_role is None:
+                doc['roles'].remove(role)
+        
+        await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
+
+    @autorole.command(name='settings', description='Set miscellaneous settings for autorole.')
+    @app_commands.default_permissions(manage_guild=True)
+    async def settings(self, interaction: discord.Interaction, option: Literal["BotsGetRoles"], value: bool):
+        doc = await self.bot.database.autorole_settings.find_one({'guild': interaction.guild.id})
+        if doc is None:
+            await interaction.response.send_message(f'No roles are set for autorole.', ephemeral=True)
+            return
+        doc[option] = value
+        await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': doc})
+        await interaction.response.send_message(f'Set {option} to {value}.', ephemeral=True)
 
         for role in doc.get('roles', []):
             discord_role = interaction.guild.get_role(role['id'])
