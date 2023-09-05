@@ -33,7 +33,7 @@ class Autorole(commands.Cog):
 
                     if member.bot and not doc.get('BotsGetRoles', False):
                         continue
-                    
+
                     if (member.joined_at.timestamp() + role['delay']) <= discord.utils.utcnow().timestamp():
                         await member.add_roles(discord_role)
 
@@ -80,6 +80,7 @@ class Autorole(commands.Cog):
             await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
         await interaction.response.send_message(f'Added {role} to the autorole list.', ephemeral=True)
 
+        if doc is None: return
         for role in doc.get('roles', []):
             discord_role = interaction.guild.get_role(role['id'])
             if discord_role is None:
@@ -99,6 +100,7 @@ class Autorole(commands.Cog):
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
         await interaction.response.send_message(f'Removed {role} from the autorole list.', ephemeral=True)
 
+        if doc is None: return
         for role in doc.get('roles', []):
             discord_role = interaction.guild.get_role(role['id'])
             if discord_role is None:
@@ -122,6 +124,7 @@ class Autorole(commands.Cog):
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
         await interaction.response.send_message(f'Set the delay for {role} to {delay} seconds.', ephemeral=True)
 
+        if doc is None: return
         for role in doc.get('roles', []):
             discord_role = interaction.guild.get_role(role['id'])
             if discord_role is None:
@@ -146,6 +149,7 @@ class Autorole(commands.Cog):
         
         await interaction.response.send_message('\n'.join(role_names), ephemeral=True)
 
+        if doc is None: return
         for role in doc.get('roles', []):
             discord_role = interaction.guild.get_role(role['id'])
             if discord_role is None:
@@ -164,6 +168,7 @@ class Autorole(commands.Cog):
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': doc})
         await interaction.response.send_message(f'Set {option} to {value}.', ephemeral=True)
 
+        if doc is None: return
         for role in doc.get('roles', []):
             discord_role = interaction.guild.get_role(role['id'])
             if discord_role is None:
