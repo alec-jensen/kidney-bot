@@ -15,7 +15,7 @@ class Autorole(commands.Cog):
         logging.info('Autorole cog loaded.')
         self.autorole_loop.start()
 
-    @tasks.loop(seconds=1)
+    @tasks.loop(seconds=300)
     async def autorole_loop(self):
         for guild in self.bot.guilds:
             doc: dict = await self.bot.database.autorole_settings.find_one({'guild': guild.id})
