@@ -112,7 +112,7 @@ class Fun(commands.Cog):
 
         if outcome == 'W':
             await message.reply('You win! +50 beans')
-            await self.bot.addcurrency(message.author, 50, 'wallet')
+            await self.bot.add_currency(message.author, 50, 'wallet')
         elif outcome == 'L':
             await message.reply('I win!')
         elif outcome == 'D':
