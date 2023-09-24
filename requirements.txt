@@ -13,3 +13,5 @@ wikipedia~=1.4.0
 Faker~=18.3.1
 git+https://github.com/alec-jensen/pafy.git@develop#egg=pafy
 git+https://github.com/ytdl-org/youtube-dl.git@master#egg=youtube_dl
+certifi>=2023.7.22 # not directly required, pinned by Snyk to avoid a vulnerability
+requests-cache>=0.6.0.dev1 # not directly required, pinned by Snyk to avoid a vulnerability
