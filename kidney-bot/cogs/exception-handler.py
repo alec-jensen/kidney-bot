@@ -57,16 +57,21 @@ class ExceptionView(discord.ui.View):
             await interaction.response.send_message('Error could not be reported!')
             return
 
-        await interaction.response.send_message('Error reported!')
-        logging.error(error_buffer[exception_id])
+        logging.error(f'Error id({exception_id})\n' + error_buffer[exception_id])
 
         bot: KidneyBot = interaction.client
         if bot.config.error_channel is not None:
             channel: discord.TextChannel = interaction.guild.get_channel(
                 bot.config.error_channel)
-            await channel.send(f"```{error_buffer[exception_id]}```")
+            
+            try:
+                await channel.send(f"```{error_buffer[exception_id]}```")
+            except:
+                await channel.send(f'error too large to send to channel. id({exception_id})')
 
         del error_buffer[exception_id]
+
+        await interaction.response.send_message('Error reported!')
 
         await self.disable_buttons(interaction)
 
@@ -101,14 +106,17 @@ class ExceptionView(discord.ui.View):
             await interaction.response.send_message('Error could not be reported!')
             return
 
-        await interaction.response.send_message('Error reported!\nFuture errors will be reported automatically.')
-        logging.error(error_buffer[exception_id])
+        logging.error(f'Error id({exception_id})\n' + error_buffer[exception_id])
 
         bot: KidneyBot = interaction.client
         if bot.config.error_channel is not None:
             channel: discord.TextChannel = interaction.guild.get_channel(
                 bot.config.error_channel)
-            await channel.send(f"```{error_buffer[exception_id]}```")
+            
+            try:
+                await channel.send(f"```{error_buffer[exception_id]}```")
+            except:
+                await channel.send(f'error too large to send to channel. id({exception_id})')
 
         del error_buffer[exception_id]
 
@@ -117,6 +125,8 @@ class ExceptionView(discord.ui.View):
             await bot.database.exceptions.insert_one(Schemas.ExceptionSchema(interaction.user.id, True))
         else:
             await bot.database.exceptions.update_one({'user_id': interaction.user.id}, {'$set': {'always_report_errors': True}})
+
+        await interaction.response.send_message('Error reported!\nFuture errors will be reported automatically. To disable this, use the `/always_report_errors` command.')
 
         await self.disable_buttons(interaction)
 
@@ -150,9 +160,9 @@ class ExceptionView(discord.ui.View):
         if exception_id is None:
             await interaction.channel.send('Error could not be reported!')
             return
-
-        await interaction.channel.send(f'Error ignored! ID: {exception_id}')
+        
         del error_buffer[exception_id]
+        await interaction.channel.send(f'Error ignored! ID: {exception_id}')
 
         await self.disable_buttons(interaction)
 
@@ -168,6 +178,8 @@ class ExceptionHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_command_error(self, ctx: commands.Context, error) -> None:
+        db_task = asyncio.create_task(self.bot.database.exceptions.find_one(Schemas.ExceptionSchema(ctx.author.id)))
+
         if isinstance(error, commands.BadArgument) or isinstance(error, commands.MissingRequiredArgument):
             await ctx.channel.send(str(error))
         elif isinstance(error, commands.MissingPermissions):
@@ -192,12 +204,16 @@ class ExceptionHandler(commands.Cog):
             error_buffer[
                 exception_id] = f'Prefix command: {ctx.command.name}; Arguments: {ctx.kwargs}; Error: {formattedTB.replace("`", "")}'
 
-            doc = await self.bot.database.exceptions.find_one(Schemas.ExceptionSchema(ctx.author.id))
+            doc = await db_task
+
             if doc is not None:
                 if doc['always_report_errors']:
-                    logging.error(error_buffer[exception_id])
-                    await self.bot.get_channel(self.bot.config.error_channel).send(f"```{error_buffer[exception_id]}```")
-                    await ctx.send(f'Reported error to developer...\n{formattedTB}')
+                    logging.error(f'Error id({exception_id})\n' + error_buffer[exception_id])
+                    try:
+                        await self.bot.get_channel(self.bot.config.error_channel).send(f"```{error_buffer[exception_id]}```")
+                    except:
+                        await self.bot.get_channel(self.bot.config.error_channel).send(f'error too large to send to channel. id({exception_id})')
+                    await ctx.send(f'Reported error to developer.')
                     del error_buffer[exception_id]
                     return
                 
@@ -217,6 +233,8 @@ class ExceptionHandler(commands.Cog):
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        db_task = asyncio.create_task(self.bot.database.exceptions.find_one(Schemas.ExceptionSchema(interaction.user.id)))
+        
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(f'Slow down! Try again in **{error.retry_after:.2f} seconds**', ephemeral=True)
         elif isinstance(error, app_commands.MissingPermissions):
@@ -235,12 +253,16 @@ class ExceptionHandler(commands.Cog):
             error_buffer[exception_id] = f'Application command: {interaction.command.name}; Arguments: {[param for param in interaction.namespace]}; \
                           Error: {formattedTB.replace("`", "")}'
 
-            doc = await self.bot.database.exceptions.find_one(Schemas.ExceptionSchema(interaction.user.id))
+            doc = await db_task
+
             if doc is not None:
                 if doc['always_report_errors']:
-                    logging.error(error_buffer[exception_id])
-                    await self.bot.get_channel(self.bot.config.error_channel).send(f"```{error_buffer[exception_id]}```")
-                    interaction.response.send_message(f'Reported error to developer...\n{formattedTB}')
+                    logging.error(f'Error id({exception_id})\n' + error_buffer[exception_id])
+                    try:
+                        await self.bot.get_channel(self.bot.config.error_channel).send(f"```{error_buffer[exception_id]}```")
+                    except:
+                        await self.bot.get_channel(self.bot.config.error_channel).send(f'error too large to send to channel. id({exception_id})')
+                    interaction.response.send_message(f'Reported error to developer.')
                     del error_buffer[exception_id]
                     return
                 

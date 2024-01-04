@@ -2,16 +2,22 @@
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
+from typing import Any
 import discord
 from discord.ext import commands
-import logging
+import asyncio
 
 from utils.config import Config
 from utils.database import Database, Schemas
-from cogs import active_guard
+
+import logging
 
 
 class KidneyBot(commands.Bot):
+    """The main bot class. This is a subclass of commands.Bot, and is used to
+    store the database connection, config, and other useful things."""
+
+    instance: 'KidneyBot' or None = None
 
     def __init__(self, command_prefix, intents):
         self.config: Config = Config()
@@ -20,11 +26,16 @@ class KidneyBot(commands.Bot):
             owner_id=self.config.owner_id,
             intents=intents
         )
+        KidneyBot.instance = self
 
         self.database: Database = Database(self.config.dbstring)
 
     async def setup_hook(self):
         await self.tree.sync()
+
+        # Import is here to prevent circular imports
+        from cogs import active_guard
+        
         self.add_view(active_guard.ReportView())
 
     """Add currency to a user's wallet or bank."""
@@ -67,7 +78,8 @@ class KidneyBot(commands.Bot):
                               description=f'{action}\n**User:** {user.mention} ({user.id})\n' +
                               (f"**Target:** {target.mention} ({target.id})" if target is not None else "") +
                               (f"\n**Reason:** {reason}\n" if reason is not None else "") +
-                              (f'**Message:** ```{message.content}```' if message is not None else ''),
+                              (f'**Message:** ```{
+                               message.content}```' if message is not None else ''),
                               color=color)
         embed.set_footer(text=f'Automated logging by kidney bot')
         return await self.get_channel(doc['log_channel']).send(embed=embed)
@@ -84,3 +96,67 @@ class KidneyBot(commands.Bot):
         async def predicate(ctx: commands.Context):
             return ctx.author.id == self.config.owner_id
         return commands.check(predicate)
+
+
+class _OptimisticUser:
+    def __init__(self, user: discord.User | discord.Member):
+        self._user = user
+        logging.info(type(self._user))
+        self.bot: KidneyBot = KidneyBot.instance
+
+        self.economy = asyncio.create_task(self._optimistic_economy())
+        self.scammer_list = asyncio.create_task(
+            self._optimistic_scammer_list())
+
+    def require(self, *args: list[callable]):
+        """Tell object what data to load. This is a coroutine.
+        If this is not called, the object will load all data."""
+        if not self._optimistic_economy in args:
+            if self.economy.done():
+                self.economy = None
+            else:
+                self.economy.cancel()
+                self.economy = None
+
+        if not self._optimistic_scammer_list in args:
+            if self.scammer_list.done():
+                self.scammer_list = None
+            else:
+                self.scammer_list.cancel()
+                self.scammer_list = None
+
+    async def _optimistic_economy(self) -> Schemas.Currency:
+        return await self.bot.database.currency.find_one({"userID": str(self._user.id)}, Schemas.Currency)
+
+    async def _optimistic_scammer_list(self) -> Schemas.ScammerList:
+        return await self.bot.database.scammer_list.find_one({"user": str(self._user.id)}, Schemas.ScammerList)
+
+
+class KBUser(_OptimisticUser):
+    def __init__(self, ctx: commands.Context = None, user: discord.User = None):
+        raise NotImplementedError("KBUser is not implemented yet.")
+
+
+class KBMember(_OptimisticUser):
+    async def async_init(self, ctx: commands.Context, member: discord.Member):
+        if isinstance(member, str):
+            self.member: discord.Member = await commands.MemberConverter().convert(ctx, member)
+        elif isinstance(member, discord.Member):
+            self.member: discord.Member = member
+        else:
+            raise TypeError(
+                f"Expected str or discord.Member, got {type(member)}")
+
+        _OptimisticUser.__init__(self, self.member)
+
+    def __init__(self, ctx: commands.Context = None, member: discord.Member = None):
+        self.ctx: commands.Context = ctx
+
+        if member is None:
+            self.member: discord.Member = None
+            return
+
+    async def convert(self, ctx, arg):
+        cls = KBMember(ctx=ctx, member=arg)
+        await cls.async_init(ctx, arg)
+        return cls

@@ -173,8 +173,10 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='kick', description="Kick users")
     @app_commands.describe(users="The users to kick. Can be multiple users, comma separated.")
+    @app_commands.describe(delete_message_time="The time to delete messages from the user. Can be up to 7 days.")
     @app_commands.default_permissions(kick_members=True)
-    async def kick(self, interaction: discord.Interaction, users: str, reason: str = None):
+    async def kick(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
+        interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]
 
         converter: commands.MemberConverter = commands.MemberConverter()
@@ -184,11 +186,28 @@ class Moderation(commands.Cog):
             users[i] = user
 
             if not await self.permissionHierarchyCheck(interaction.user, user):
-                interaction.response.send_message(
+                interaction.followup.send(
                     "You cannot moderate users higher than you", ephemeral=True)
                 return
 
             await interaction.guild.kick(user, reason=reason)
+
+        if max_delete_time is not None:
+            try:
+                max_delete_time = await self.convert_time_to_seconds(delete_message_time)
+            except:
+                interaction.followup.send(
+                    "You cannot input invalid numbers.", ephemeral=True)
+                return
+        else:
+            max_delete_time = 0
+
+        for channel in interaction.guild.channels:
+            async for message in channel.history():
+                if message.author in users:
+                    if message.created_at > interaction.created_at - timedelta(seconds=max_delete_time):
+                        await message.delete()
+
 
         embed = discord.Embed(title=f"Kick result",
                               description=None, color=discord.Color.red())
@@ -197,20 +216,27 @@ class Moderation(commands.Cog):
             [user.mention for user in users]), inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.response.send_message(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
 
     @app_commands.command(name='ban', description="Ban users")
     @app_commands.describe(users="The users to ban. Can be multiple users, comma separated.")
-    @app_commands.describe(delete_message_days="The number of days of messages to delete. Defaults to 0. Must be between 0 and 7.")
+    @app_commands.describe(delete_message_time="The time to delete messages from the user. Can be up to 7 days.")
     @app_commands.default_permissions(ban_members=True)
-    async def ban(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_days: int = 0):
-        if delete_message_days < 0:
-            interaction.response.send_message(
-                "You cannot input invalid numbers.", ephemeral=True)
-            return
+    async def ban(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
+        interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+
+        if delete_message_time is not None:
+            try:
+                delete_message_time = await self.convert_time_to_seconds(delete_message_time)
+            except:
+                interaction.followup.send(
+                    "You cannot input invalid numbers.", ephemeral=True)
+                return
+        else:
+            delete_message_time = 0
         
-        if delete_message_days > 7:
-            interaction.response.send_message(
+        if delete_message_time > 604800:
+            interaction.followup.send(
                 "You can only delete messages up to 7 days old", ephemeral=True)
             return
         
@@ -223,11 +249,11 @@ class Moderation(commands.Cog):
             users[i] = user
 
             if not await self.permissionHierarchyCheck(interaction.user, user):
-                interaction.response.send_message(
+                interaction.followup.send(
                     "You cannot moderate users higher than you", ephemeral=True)
                 return
 
-            await interaction.guild.ban(user, reason=reason, delete_message_days=delete_message_days)
+            await interaction.guild.ban(user, reason=reason, delete_message_seconds=delete_message_time)
 
         embed = discord.Embed(title=f"Ban result",
                               description=None, color=discord.Color.red())
@@ -236,12 +262,13 @@ class Moderation(commands.Cog):
             [user.mention for user in users]), inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.response.send_message(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
 
     @app_commands.command(name='unban', description="Unban users")
     @app_commands.describe(users="The users to unban. Can be multiple users, comma separated.")
     @app_commands.default_permissions(ban_members=True)
     async def unban(self, interaction: discord.Interaction, users: str, reason: str = None):
+        interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]
 
         converter: commands.MemberConverter = commands.MemberConverter()
@@ -251,7 +278,7 @@ class Moderation(commands.Cog):
             users[i] = user
 
             if not await self.permissionHierarchyCheck(interaction.user, user):
-                interaction.response.send_message(
+                interaction.followup.send(
                     "You cannot moderate users higher than you", ephemeral=True)
                 return
 
@@ -264,7 +291,7 @@ class Moderation(commands.Cog):
             [user.mention for user in users]), inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.response.send_message(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
 
 
 async def setup(bot):

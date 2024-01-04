@@ -35,9 +35,12 @@ class Schemas:
 
         def __str__(self) -> str:
             string_repr = self.__class__.__name__ + '('
+            items = []
             for key, value in self.to_dict().items():
-                string_repr += f'{key}={value}, '
-            string_repr = string_repr[:-2] + ')'
+                items.append(f'{key}={value}')
+
+            string_repr = string_repr + ', '.join(items)
+            string_repr = string_repr + ')'
             return string_repr
 
         def __repr__(self) -> str:
@@ -304,13 +307,16 @@ class Collection:
         self.schema: Schemas.BaseSchema = schema
 
     """Find one document in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Schemas.BaseSchema = None) -> dict | Schemas.BaseSchema:
+    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Schemas.BaseSchema = None) -> dict | Schemas.BaseSchema | None:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
         document = await self.collection.find_one(query)
         if schema is None:
             schema = self.schema
+
+        if document is None:
+            return None
 
         return document if schema is None else schema.from_dict(document)
 

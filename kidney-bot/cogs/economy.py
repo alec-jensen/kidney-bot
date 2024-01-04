@@ -77,8 +77,11 @@ class Economy(commands.Cog):
             user = interaction.user
         profile = UserProfile(self.bot, self.bot.database, user)
         await profile.async_init()
-        await interaction.response.send_message(
-            f"*{user.name}'s* balance:\n**Wallet: **{await profile.wallet()} beans\n**Bank: **{await profile.bank()} beans")
+
+        embed = discord.Embed(title=f"{user.name}'s balance", color=0x00ff00)
+        embed.add_field(name="Wallet", value=f"{await profile.wallet()} beans", inline=False)
+        embed.add_field(name="Bank", value=f"{await profile.bank()} beans", inline=False)
+        await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name="deposit", description='Deposit beans')
     async def deposit(self, interaction: discord.Interaction, amount: str):

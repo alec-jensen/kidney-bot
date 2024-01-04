@@ -12,10 +12,12 @@ import datetime
 import time
 
 from _version import __version__
-from utils.kidney_bot import KidneyBot
+
+from utils import kidney_bot
+from utils.kidney_bot import KidneyBot, KBMember, KBUser
 from utils.log_formatter import LogFormatter, LogFileFormatter
 
-start = time.perf_counter_ns()
+time_start = time.perf_counter_ns()
 
 # Logging configuration
 
@@ -74,7 +76,7 @@ async def user_count():
 @bot.listen('on_ready')
 async def on_ready():
     logging.info(f"Kidney Bot {__version__}")
-    logging.info(f"Ready in {(time.perf_counter_ns() - start) / 1e9} seconds.")
+    logging.info(f"Ready in {(time.perf_counter_ns() - time_start) / 1e9} seconds.")
     logging.info(f"Logged in as {bot.user} ({bot.user.id})")
 
 
