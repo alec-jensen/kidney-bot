@@ -133,10 +133,10 @@ class Automod(commands.Cog):
         if len(detections) > 0:
             await message.delete()
             await message.author.send(f'Your message in {message.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
-            await self.bot.log(message.guild, 'Automod', 'AI Detection (message send)', f'Message from {message.author} was deleted due to the following AI detections:\n{detections_str}', user=message.guild.me, target=message.author)
+            await self.bot.log(message.guild, 'Automod', 'AI Detection (message send)', f'Message from {message.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{message.content}', user=message.guild.me, target=message.author)
 
     @commands.Cog.listener()
-    async def on_message_edit(self, before, after):
+    async def on_message_edit(self, before: discord.Message, after: discord.Message):
         try:
             doc = await self.bot.database.ai_detection.find_one({'guild': after.guild.id})
             if doc is None or doc.get('enabled') is False:
@@ -164,10 +164,10 @@ class Automod(commands.Cog):
         if len(detections) > 0:
             await after.delete()
             await after.author.send(f'Your message in {after.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
-            await self.bot.log(after.guild, 'Automod', 'AI Detection (message edit)', f'Message from {after.author} was deleted due to the following AI detections:\n{detections_str}', user=after.guild.me, target=after.author)
+            await self.bot.log(after.guild, 'Automod', 'AI Detection (message edit)', f'Message from {after.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{after.content}', user=after.guild.me, target=after.author)
 
     @commands.Cog.listener()
-    async def on_member_update(self, before, after: discord.Member):
+    async def on_member_update(self, before: discord.Member, after: discord.Member):
         if after.nick is None:
             return
         if after.nick == before.nick:
@@ -181,18 +181,18 @@ class Automod(commands.Cog):
             doc = await self.bot.database.ai_detection.find_one({'guild': after.guild.id})
             if doc is None or doc.get('enabled') is False:
                 return
-            if after.author.bot:
+            if after.bot:
                 return
         except AttributeError:
             return
 
-        if await self.check_whitelist(after.author):
+        if await self.check_whitelist(after):
             return
 
         if self.bot.config.perspective_api_key is None:
             return
 
-        detections = await self.ai_detect(after.content, after.guild, doc)
+        detections = await self.ai_detect(after.nick, after.guild, doc)
         detections_str = ''
 
         if detections is None:
@@ -203,8 +203,8 @@ class Automod(commands.Cog):
 
         if len(detections) > 0:
             await after.edit(nick=before.nick)
-            await after.member.send(f'Your nickname was reset due to AI detections:\n{detections_str}')
-            await self.bot.log(after.guild, 'Automod', 'AI Detection (nickname update)', f'Message from {after.author} was deleted due to the following AI detections:\n{detections_str}', user=after.guild.me, target=after.author)
+            await after.send(f'Your nickname was reset due to AI detections:\n{detections_str}')
+            await self.bot.log(after.guild, 'Automod', 'AI Detection (nickname update)', f'Nickname of {after} was reset due to the following AI detections:\n{detections_str}\nNickname:\n{after.nick}', user=after.guild.me, target=after)
 
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
