@@ -58,10 +58,16 @@ async def status():
 
         await asyncio.sleep(16)
 
+
 async def user_count():
     await bot.wait_until_ready()
+    channel = bot.get_channel(bot.config.user_count_channel_id)
+    if channel is None:
+        logging.warning("User count channel not found, not counting users.")
+        return
+    
     while not bot.is_closed():
-        await bot.get_channel(bot.config.user_count_channel).edit(name=f"Total Users: {len(bot.users)}")
+        await channel.edit(name=f"Total Users: {len(bot.users)}")
         await asyncio.sleep(360)
 
 
@@ -73,14 +79,13 @@ async def on_ready():
 
 
 @bot.listen('on_guild_join')
-async def on_guild_join(guild):
-    n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
-    if n > 0:
-        doc = await bot.database.serverbans.find_one({"id": str(guild.id)})
+async def on_guild_join(guild: discord.Guild):
+    doc = await bot.database.serverbans.find_one({"id": guild.id})
+    if doc is not None:
         embed = discord.Embed(title=f"{guild} is banned.",
                               description=f"Your server *{guild}* is banned from using **{bot.user.name}**.",
                               color=discord.Color.red())
-        embed.add_field(name=f"You can appeal by contacting __**{bot.get_user(766373301169160242)}**__.",
+        embed.add_field(name=f"You can appeal by contacting __**{bot.get_user(bot.config.owner_id).mention}**__.",
                         value="\u2800")
         embed.add_field(name="Reason", value=f"```{doc['reason']}```")
         embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
@@ -89,14 +94,16 @@ async def on_guild_join(guild):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def testLog(ctx, actiontype, action, reason, user: discord.User):
+    """Internal command for testing the log function."""
     await bot.log(ctx.guild, actiontype, action, reason, user)
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def load(ctx, extension: str):
+    """Load a cog."""
     try:
         os.rename(f'cogs/-{extension}.py', f'cogs/{extension}.py')
         await bot.load_extension(f'cogs.{extension}')
@@ -107,8 +114,9 @@ async def load(ctx, extension: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def unload(ctx, extension: str):
+    """Unload a cog."""
     try:
         await bot.unload_extension(f'cogs.{extension}')
         os.rename(f'cogs/{extension}.py', f'cogs/-{extension}.py')
@@ -119,14 +127,15 @@ async def unload(ctx, extension: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def reload(ctx, extension: str):
+    """Reload a cog."""
     try:
         await bot.unload_extension(f'cogs.{extension}')
     except Exception as e:
         await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
         return
-    
+
     try:
         await bot.load_extension(f'cogs.{extension}')
     except Exception as e:
@@ -138,8 +147,9 @@ async def reload(ctx, extension: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def say(ctx, *, text: str):
+    """Make the bot say something."""
     try:
         await ctx.message.delete()
     except:
@@ -148,8 +158,9 @@ async def say(ctx, *, text: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def reply(ctx, message: str, *, text: str):
+    """Make the bot reply to a message."""
     try:
         await ctx.message.delete()
     except:
@@ -160,8 +171,9 @@ async def reply(ctx, message: str, *, text: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def react(ctx, message: str, reaction: str):
+    """Make the bot react to a message."""
     try:
         await ctx.message.delete()
     except:
@@ -172,8 +184,9 @@ async def react(ctx, message: str, reaction: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def announce(ctx, *, message: str):
+    """Send a global message to all server owners."""
     await ctx.reply(f'Sent global message\n```{message}```')
     ids = []
     for guild in bot.guilds:
@@ -184,22 +197,24 @@ async def announce(ctx, *, message: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def raiseexception(ctx):
+    """Internal command for testing error handling."""
     raise Exception('artificial exception raised')
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def serverban(ctx, guild: discord.Guild, *, text: str):
+    """Ban a server from using the bot."""
     n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
     if n > 0:
         await ctx.response.send_message("Server already banned!", ephemeral=True)
         return
     doc = {
-        "id": str(guild.id),
-        "name": str(guild),
-        "owner": str(guild.owner),
+        "id": guild.id,
+        "name": guild,
+        "owner": guild.owner,
         "reason": str(text)
     }
     embed = discord.Embed(title=f"{guild} has been banned.",
@@ -217,27 +232,100 @@ async def serverban(ctx, guild: discord.Guild, *, text: str):
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def serverunban(ctx, guild: str):
-    n = await bot.database.serverbans.count_documents({"id": str(guild)})
+    """Unban a server from using the bot."""
+    n = await bot.database.serverbans.count_documents({"id": guild})
     if n == 0:
         await ctx.reply("Server not banned!")
         return
-    await bot.database.serverbans.delete_one({"id": str(guild)})
+    await bot.database.serverbans.delete_one({"id": guild})
     await ctx.reply(f"Server *{guild}* has been unbanned from using **{bot.user.name}**")
 
 
 @bot.command()
-@commands.is_owner()
+@bot.is_owner()
 async def createinvite(ctx, guild: discord.Guild):
-    inv = 'error'
-    for i in guild.text_channels:
+    """Create an invite to a server."""
+    invite = None
+    for channel in guild.text_channels:
         try:
-            inv = await i.create_invite(max_uses=1, reason='bot developer requested server invite.')
+            invite = await channel.create_invite(max_uses=1, reason='bot developer requested server invite.')
             break
         except:
             pass
-    await ctx.reply(inv)
+
+    if invite is None:
+        return await ctx.reply("Could not create invite.")
+
+    await ctx.reply(invite)
+
+
+@bot.command()
+@bot.is_owner()
+async def reloadconfig(ctx):
+    """Reload the config file."""
+    try:
+        bot.config.reload()
+    except Exception as e:
+        await ctx.reply(f"Could not reload config file.\n`{e}`")
+        return
+
+    await ctx.reply("Reloaded config file.")
+
+@bot.command()
+@bot.is_owner()
+async def guild_debug_info(ctx: commands.Context, guild: discord.Guild = None):
+    message = await ctx.send("Generating debug report...")
+    if guild is None:
+        guild = ctx.guild
+
+    embed = discord.Embed(title=f"Debug report for {guild}({guild.id})", color=discord.Color.blurple())
+    embed.add_field(name=guild.name, value=f"""**Owner:** {guild.owner}({guild.owner_id})
+                    **Created:** <t:{guild.created_at.timestamp}>
+                    **Members:** {guild.member_count}""")
+    
+    possible_issues = []
+
+    # Check if bot has the correct permissions
+    permissions = guild.me.guild_permissions
+    missing_permissions = []
+
+    if not permissions.administrator:
+        missing_permissions.append("Administrator")
+    if not permissions.manage_messages:
+        missing_permissions.append("Manage Messages")
+    if not permissions.kick_members:
+        missing_permissions.append("Kick Members")
+    if not permissions.ban_members:
+        missing_permissions.append("Ban Members")
+    if not permissions.manage_nicknames:
+        missing_permissions.append("Manage Nicknames")
+    
+    if len(missing_permissions) > 0:
+        possible_issues.append(f"Missing permissions: {', '.join(missing_permissions)}")
+
+    # Check if bot's role is above normal members
+    top_role_pos = len(guild.me.roles) - 1
+
+    for i, role in enumerate(guild.roles):
+        if i < top_role_pos: pass
+
+        role_perms = role.permissions
+
+        if not role_perms.manage_messages or not role_perms.manage_nicknames:
+            possible_issues.append(f"Role may not be above normal members. Found {role.mention} above me.")
+
+    # TODO: check database for issues
+
+    if len(possible_issues) == 0:
+        embed.add_field(name="No issues found!", value="")
+    else:
+        embed.add_field(name="Possible issues:", value="\n".join(possible_issues))
+
+    embed.set_footer(text=f"Debug report for {guild.name}", icon_url=guild.icon.url)
+
+    await message.edit(content="", embed=embed)
 
 
 async def main():
@@ -247,11 +335,10 @@ async def main():
                 if not filename.startswith('-'):
                     await bot.load_extension(f'cogs.{filename[:-3]}')
 
-        await bot.load_extension('jishaku')
-
+        # Why does the status stop working after a while?
         asyncio.create_task(status())
-        
-        if bot.config.user_count_channel is not None:
+
+        if bot.config.user_count_channel_id is not None:
             asyncio.create_task(user_count())
         else:
             logging.warning("No user count channel set, not counting users.")

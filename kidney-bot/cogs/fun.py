@@ -18,7 +18,7 @@ class Fun(commands.Cog):
 
     def __init__(self, bot):
         self.bot = bot
-        self.scenarios = [
+        self.rps_scenarios = [
             ['D', 'L', 'W'],
             ['W', 'D', 'L'],
             ['L', 'W', 'D'],
@@ -27,8 +27,6 @@ class Fun(commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self):
         logging.info('Fun cog loaded.')
-
-                
 
     @app_commands.command(name="yomama", description="get a yo mama joke")
     async def yomama(self, interaction: discord.Interaction):
@@ -84,7 +82,7 @@ class Fun(commands.Cog):
         responses = ['indeed', 'undoubtedly', 'no', 'dunno', 'indecisive']
         await interaction.response.send_message(f'> {question}\n:8ball: {random.choice(responses)}')
 
-    @app_commands.command(name='rps', description='play rps for money')
+    @app_commands.command(name='rps', description='play rps for a chance to win beans')
     async def rps(self, interaction: discord.Interaction):
         await interaction.response.send_message('Send R for :rock:, send P for :scroll:, send S for :scissors:')
 
@@ -92,23 +90,18 @@ class Fun(commands.Cog):
             return m.content.lower() in ['r', 'p', 's'] and m.channel == interaction.channel and m.author == interaction.user
 
         message = await self.bot.wait_for('message', check=check, timeout=15)
-        if message.content.lower() == 'r':
-            player = 0
-        elif message.content.lower() == 'p':
-            player = 1
-        elif message.content.lower() == 's':
-            player = 2
+        player = ['r', 'p', 's'].index(message.content.lower())
         while True:
             computer = random.randint(0, 2)
-            if self.scenarios[player][computer] == 'L':
+            if self.rps_scenarios[player][computer] == 'L':
                 if random.randint(0, 2) == 0:
                     break
                 else:
                     continue
-            elif self.scenarios[player][computer] in ['W', 'D']:
+            elif self.rps_scenarios[player][computer] in ['W', 'D']:
                 break
-        outcome = self.scenarios[player][
-            computer]  # Check the table for the outcome
+        # Check the table for the outcome
+        outcome = self.rps_scenarios[player][computer]
 
         if outcome == 'W':
             await message.reply('You win! +50 beans')
@@ -117,7 +110,7 @@ class Fun(commands.Cog):
             await message.reply('I win!')
         elif outcome == 'D':
             await message.reply('Draw!')
-    
+
     @app_commands.command(name='fight_under_this_flag', description='fight under this flag meme')
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def fight_under_this_flag(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
@@ -128,7 +121,7 @@ class Fun(commands.Cog):
         if num_arguments > 1:
             await interaction.response.send_message('You must provide exactly one of the arguments: user, flag, or flag_url.', ephemeral=True)
             return
-        
+
         if user is None and flag is None and flag_url is None:
             image = interaction.user.avatar.url
         if user is not None:
@@ -141,7 +134,7 @@ class Fun(commands.Cog):
         await interaction.response.defer()
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.fight_under_this_flag(), filename='fight_under_this_flag.png'))
-    
+
     @app_commands.command(name='uwu_discord', description='uwu discord meme')
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def uwu_discord(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
@@ -159,7 +152,7 @@ class Fun(commands.Cog):
         await interaction.response.defer()
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.uwu_discord(), filename='uwu_discord.png'))
-    
+
     @app_commands.command(name='rip', description='rip meme')
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def rip(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
@@ -177,7 +170,7 @@ class Fun(commands.Cog):
         await interaction.response.defer()
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.rip(), filename='rip.png'))
-    
+
     @app_commands.command(name='synonym', description='get a synonym')
     async def synonym(self, interaction: discord.Interaction, word: str):
         async with aiohttp.ClientSession() as cs:
@@ -187,9 +180,10 @@ class Fun(commands.Cog):
                 for i in res:
                     if len(words) < 10:
                         words.append(i['word'])
-                    else: break
+                    else:
+                        break
                 await interaction.response.send_message(f"Synonyms for {word}:\n{', '.join(words)}")
-    
+
     @app_commands.command(name='antonym', description='get an antonym')
     async def antonym(self, interaction: discord.Interaction, word: str):
         async with aiohttp.ClientSession() as cs:
@@ -199,13 +193,14 @@ class Fun(commands.Cog):
                 for i in res:
                     if len(words) < 10:
                         words.append(i['word'])
-                    else: break
+                    else:
+                        break
                 await interaction.response.send_message(f"Antonyms for {word}:\n{', '.join(words)}")
-    
+
     @app_commands.command(name='shakespearean-insult', description='get a shakespearean insult')
     async def shakespearean_insult(self, interaction: discord.Interaction):
         await interaction.response.send_message(insult())
-    
+
     @app_commands.command(name='wikipedia', description='get a wikipedia article')
     async def wikipedia(self, interaction: discord.Interaction, query: str):
         try:
@@ -215,7 +210,8 @@ class Fun(commands.Cog):
             for i in e.options:
                 if len(options) < 10:
                     options.append(i)
-                else: break
+                else:
+                    break
             await interaction.response.send_message(f"Could not determine what you meant, please be more specific. Here are some options:\n{', '.join(options)}", ephemeral=True)
 
     @app_commands.command(name="fake-info", description="get fake info")

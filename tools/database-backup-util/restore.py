@@ -2,6 +2,10 @@
 # Copyright (C) 2022  Alec Jensen
 # Full license at LICENSE.md
 
+# file deepcode ignore Ssrf: this file is not user-facing
+# file deepcode ignore PT
+# file deepcode ignore NoSqli
+
 """
 make sure to EMPTY YOUR DATABASE before restoring from a backup.
 """

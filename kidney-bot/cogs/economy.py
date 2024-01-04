@@ -1,7 +1,6 @@
 # This cog creates all economy based commands
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
-import asyncio
 
 import discord
 from discord.ext import commands
@@ -9,21 +8,15 @@ from discord import app_commands
 import random
 import logging
 
-""" currency data format:
-{
-    "userID": "",
-    "wallet": "",
-    "bank": "",
-    "inventory": []
-}
-"""
+from utils.database import Database
+from utils.kidney_bot import KidneyBot
 
 
 class UserProfile:
-    def __init__(self, bot, database, user: discord.User):
-        self.bot = bot
-        self.database = database
-        self.user = user
+    def __init__(self, bot: KidneyBot, database: Database, user: discord.User):
+        self.bot: KidneyBot = bot
+        self.database: Database = database
+        self.user: discord.User = user
 
     async def async_init(self):
         await self.bot.add_currency(self.user, 0, 'wallet')
@@ -46,7 +39,8 @@ class UserProfile:
     async def add_currency(self, amount: int, location: str):
         location = location.lower()
         if location not in ['wallet', 'bank']:
-            raise ValueError(f"Parameter \"location\" must be 'wallet' or 'bank' got: {location}")
+            raise ValueError(
+                f"Parameter \"location\" must be 'wallet' or 'bank' got: {location}")
         await self.bot.add_currency(self.user, amount, location)
 
 
@@ -152,7 +146,6 @@ class Economy(commands.Cog):
             await target_profile.add_currency(-amount, 'wallet')
             await profile.add_currency(amount, 'wallet')
             await interaction.response.send_message(f"Stole {amount} beans from {user.mention}")
-
 
 
 async def setup(bot):

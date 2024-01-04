@@ -2,6 +2,8 @@
 # Copyright (C) 2022  Alec Jensen
 # Full license at LICENSE.md
 
+# file deepcode ignore Ssrf: this file is not user-facing
+
 import os
 import json
 import requests

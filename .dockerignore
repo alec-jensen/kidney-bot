@@ -1,0 +1,12 @@
+venv
+logs
+*.pyc
+__pycache__
+setup.py
+.gitattributes
+.gitignore
+CONTRIBUTING.md
+README.md
+SECURITY.md
+docker-compose.yml
+.vscode

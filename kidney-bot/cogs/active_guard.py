@@ -11,6 +11,8 @@ from typing import Literal
 import uuid
 import logging
 
+from utils.database import Schemas
+
 
 class ReportView(discord.ui.View):
     def __init__(self):
@@ -20,19 +22,19 @@ class ReportView(discord.ui.View):
     async def accept(self, interaction: discord.Interaction, button: discord.ui.Button):
         report_id = interaction.message.embeds[0].footer.text.split('`')[1]
         bot = interaction.client
-        report = await bot.database.reports.find_one({"report_id": report_id})
-        if report["report_status"] is not None or interaction.user.id == bot.config.owner_id:
+        report: Schemas.Reports = await bot.database.reports.find_one({"report_id": report_id}, Schemas.Reports)
+        if report.report_status is not None or interaction.user.id == bot.config.owner_id:
             await bot.database.reports.update_one({"report_id": report_id},
-                                                       {"$set": {"report_status": "accetped", "handled_by": interaction.user.id}})
+                                                       {"$set": {"report_status": "accepted", "handled_by": interaction.user.id}})
 
-        if report["report_status"] is not None or interaction.user.id == bot.config.owner_id:
-            doc = await bot.database.scammer_list.find_one({"user": report["reported_user"]})
+        if report.report_status is None:
+            doc: Schemas.ScammerList = await bot.database.scammer_list.find_one({"user": report.reported_user}, Schemas.ScammerList)
             if doc is None:
-                await bot.database.scammer_list.insert_one({
-                    "user": report["reported_user"],
-                    "time": time.time(),
-                    "reason": report["reason"]
-                })
+                await bot.database.scammer_list.insert_one(Schemas.ScammerList(
+                    user=report.reported_user,
+                    time=time.time(),
+                    reason=report.reason,
+                ))
 
         try:
             await bot.get_user(report["reporter"]).send(f"Your report on **{report['reported_user_name']}** has been accepted.")
@@ -50,9 +52,9 @@ class ReportView(discord.ui.View):
 
         async for message in bot.get_channel(bot.config.report_channel).history(limit=1000):
             report_id = message.embeds[0].footer.text.split('`')[1]
-            doc = await bot.database.reports.find_one({"report_id": report_id})
+            doc: Schemas.Reports = await bot.database.reports.find_one({"report_id": report_id}, Schemas.Reports)
             if doc is not None:
-                if doc['reported_user'] == report['reported_user'] and doc['report_status'] == None:
+                if doc.reported_user == report.reported_user and doc.report_status == None:
                     embed = interaction.message.embeds[0]
                     embed.add_field(name='❕', value=f'User is on blacklist.', inline=False)
                     await message.edit(embed=embed)
@@ -61,17 +63,22 @@ class ReportView(discord.ui.View):
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
         report_id = interaction.message.embeds[0].footer.text.split('`')[1]
         bot = interaction.client
-        report = await bot.database.reports.find_one({"report_id": report_id})
+        report: Schemas.Reports = await bot.database.reports.find_one({"report_id": report_id}, Schemas.Reports)
         if report["report_status"] is not None or interaction.user.id == bot.config.owner_id:
             await bot.database.reports.update_one({"report_id": report_id},
                                                        {"$set": {"report_status": "denied", "handled_by": interaction.user.id}})
 
-        doc = await bot.database.scammer_list.find_one({"user": report["reported_user"]})
+        doc: Schemas.ScammerList = await bot.database.scammer_list.find_one({"user": report.reported_user}, Schemas.ScammerList)
         if doc is not None:
             await bot.database.scammer_list.delete_one(doc)
+            for guild in bot.fetch_guilds():
+                try:
+                    await guild.unban(discord.Object(id=report.reported_user))
+                except:
+                    pass
 
         try:
-            await bot.get_user(report["reporter"]).send(f"Your report on **{report['reported_user_name']}** has been denied.")
+            await bot.get_user(report.reporter).send(f"Your report on **{report.reported_user_name}** has been denied.")
         except:
             pass
         embed = interaction.message.embeds[0]
@@ -99,7 +106,7 @@ class ActiveGuard(commands.Cog):
             doc = await self.bot.database.scammer_list.find_one({"user": member.id})
             if doc is not None:
                 await member.send(f'You have been banned from {message.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
-                await member.kick(reason="User is on global blacklist.")
+                await member.ban(reason="User is on global blacklist.")
                 await self.bot.log(message.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
 
     @commands.Cog.listener()
@@ -112,7 +119,7 @@ class ActiveGuard(commands.Cog):
             doc = await self.bot.database.scammer_list.find_one({"user": member.id})
             if doc is not None:
                 await member.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
-                await member.kick(reason="User is on global blacklist.")
+                await member.ban(reason="User is on global blacklist.")
                 await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
     
     @commands.Cog.listener()
@@ -122,7 +129,7 @@ class ActiveGuard(commands.Cog):
             doc = await self.bot.database.scammer_list.find_one({"user": after.id})
             if doc is not None:
                 await after.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
-                await after.kick(reason="User is on global blacklist.")
+                await after.ban(reason="User is on global blacklist.")
                 await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
 
     @commands.Cog.listener()
@@ -132,7 +139,7 @@ class ActiveGuard(commands.Cog):
             doc = await self.bot.database.scammer_list.find_one({"user": after.id})
             if doc is not None:
                 await after.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
-                await after.kick(reason="User is on global blacklist.")
+                await after.ban(reason="User is on global blacklist.")
                 await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
 
     @commands.Cog.listener()
@@ -142,7 +149,7 @@ class ActiveGuard(commands.Cog):
             doc = await self.bot.database.scammer_list.find_one({"user": member.id})
             if doc is not None:
                 await member.send(f'You have been banned from {member.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
-                await member.kick(reason="User is on global blacklist.")
+                await member.ban(reason="User is on global blacklist.")
                 await self.bot.log(member.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
 
     @commands.Cog.listener()
@@ -152,7 +159,7 @@ class ActiveGuard(commands.Cog):
             doc = await self.bot.database.scammer_list.find_one({"user": user.id})
             if doc is not None:
                 await user.send(f'You have been banned from {channel.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
-                await user.kick(reason="User is on global blacklist.")
+                await user.ban(reason="User is on global blacklist.")
                 await self.bot.log(channel.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=user)
 
     active_guard = app_commands.Group(name='activeguard', description='Manage ActiveGuard settings',
@@ -197,7 +204,7 @@ class ActiveGuard(commands.Cog):
             "reporter": interaction.user.id,
             "time_reported": time.time(),
             "reported_user": user.id,
-            "reported_user_name": f"{user}#{user.discriminator}",
+            "reported_user_name": user,
             "reason": reason,
             "attached_message": message.content if message is not None else None,
             "attached_message_attachments": message.attachments if message is not None else None,
