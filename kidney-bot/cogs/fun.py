@@ -218,6 +218,31 @@ class Fun(commands.Cog):
     async def fake_info(self, interaction: discord.Interaction):
         fake = Faker()
         await interaction.response.send_message(f"{fake.name()}\n{fake.address()}")
+    
+    @app_commands.command(name="quote", description="get a quote")
+    async def quote(self, interaction: discord.Interaction, author=None):
+        if author:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f'https://api.quotable.io/random?author={author}') as response:
+                    data = await response.json()
+        else:
+            async with aiohttp.ClientSession() as session:
+                async with session.get('https://api.quotable.io/random') as response:
+                    data = await response.json()
+        await interaction.response.send_message(f'"{data["content"]}" - {data["author"]}')
+
+    @app_commands.command(name="weather", description="get weather")
+    async def weather(self, interaction: discord.Interaction, location: str):
+        API_KEY = weatherapikey 
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f'http://api.openweathermap.org/data/2.5/weather?q={location}&appid={API_KEY}') as response:
+                data = await response.json()
+        weather_description = data['weather'][0]['description']
+        humidity = data['main']['humidity']
+        wind_speed = data['wind']['speed']
+        await interaction.response.send_message(f'In {location}, it is currently {data["main"]["temp"]}°C with {weather_description}. The humidity is {humidity}% and the wind speed is {wind_speed} m/s.')
+
+
 
 
 async def setup(bot):
