@@ -133,7 +133,7 @@ class ActiveGuard(commands.Cog):
             if await user_doc is not None:
                 await member.send(f'You have been banned from {message.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await member.ban(reason="User is on global blacklist.")
-                await self.bot.log(message.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
+                await self.bot.log(message.guild, 'Automod', 'Remove blacklisted user', 'User is on global blacklist. Blocking blacklisted users is enabled.', user=member)
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
@@ -151,7 +151,7 @@ class ActiveGuard(commands.Cog):
             if await user_doc is not None:
                 await member.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await member.ban(reason="User is on global blacklist.")
-                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
+                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on global blacklist. Blocking blacklisted users is enabled.', user=member)
     
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
@@ -161,7 +161,7 @@ class ActiveGuard(commands.Cog):
             if await user_doc is not None:
                 await after.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await after.ban(reason="User is on global blacklist.")
-                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
+                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on global blacklist. Blocking blacklisted users is enabled.', user=after)
 
     @commands.Cog.listener()
     async def on_user_update(self, before: discord.User, after: discord.User):
@@ -171,7 +171,7 @@ class ActiveGuard(commands.Cog):
             if await user_doc is not None:
                 await after.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await after.ban(reason="User is on global blacklist.")
-                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
+                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on global blacklist. Blocking blacklisted users is enabled.', user=after)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
@@ -181,7 +181,7 @@ class ActiveGuard(commands.Cog):
             if await user_doc is not None:
                 await member.send(f'You have been banned from {member.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await member.ban(reason="User is on global blacklist.")
-                await self.bot.log(member.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
+                await self.bot.log(member.guild, 'Automod', 'Remove blacklisted user', 'User is on global blacklist. Blocking blacklisted users is enabled.', user=member)
 
     @commands.Cog.listener()
     async def on_typing(self, channel: discord.TextChannel, user: discord.User, when: datetime.datetime):
@@ -191,7 +191,7 @@ class ActiveGuard(commands.Cog):
             if doc is not None:
                 await user.send(f'You have been banned from {channel.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await user.ban(reason="User is on global blacklist.")
-                await self.bot.log(channel.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=user)
+                await self.bot.log(channel.guild, 'Automod', 'Remove blacklisted user', 'User is on global blacklist. Blocking blacklisted users is enabled.', user=user)
 
     active_guard = app_commands.Group(name='activeguard', description='Manage ActiveGuard settings',
                                       default_permissions=discord.Permissions(manage_guild=True))
