@@ -78,8 +78,9 @@ class Music(commands.Cog):
         if not voice:
             await interaction.user.voice.channel.connect()
             voice = interaction.guild.voice_client
+        await interaction.response.send_message("Searching for song, this may take a few seconds.")
+        
         if not ("youtube.com" in song or "youtu.be" in song):
-            await interaction.response.send_message("Searching for song, this may take a few seconds.")
             result = await self.search_song(song, get_url=True)
             if result is None:
                 await interaction.edit_original_response(content="I couldn't find that song!")
