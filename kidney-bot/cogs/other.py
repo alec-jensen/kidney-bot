@@ -29,7 +29,7 @@ class Other(commands.Cog):
     @app_commands.command(name='idk', description='Alec said IDK when I asked him what to make so I said kk and here it is')
     async def idk(self, interaction: discord.Interaction):
         emb = discord.Embed(color=0x313338)
-        emb.set_image(url="https:///prosurestring.github.io/alecidk.jpg.png")
+        emb.set_image(url="https://www.prosurestring.xyz/alecidk.png")
         await interaction.response.send_message(embed=emb, ephemeral=True)
 
     @app_commands.command(name='ping', description='Get the current ping of the bot.')
