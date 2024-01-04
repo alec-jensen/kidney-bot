@@ -262,7 +262,7 @@ class ExceptionHandler(commands.Cog):
                         await self.bot.get_channel(self.bot.config.error_channel).send(f"```{error_buffer[exception_id]}```")
                     except:
                         await self.bot.get_channel(self.bot.config.error_channel).send(f'error too large to send to channel. id({exception_id})')
-                    interaction.response.send_message(f'Reported error to developer.')
+                    await interaction.response.send_message(f'Reported error to developer.')
                     del error_buffer[exception_id]
                     return
                 
