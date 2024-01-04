@@ -188,7 +188,7 @@ class ExceptionHandler(commands.Cog):
             pass
         elif isinstance(error, commands.CommandOnCooldown):
             await ctx.channel.send(f'Slow down! Try again in **{error.retry_after:.2f} seconds**')
-        elif isinstance(error, commands.NotOwner):
+        elif isinstance(error, commands.NotOwner) or isinstance(error, commands.CheckFailure):
             await ctx.message.add_reaction(r'<:no_command:955591041032007740>')
         elif isinstance(error, asyncio.exceptions.TimeoutError):
             await ctx.reply('Time is up!')
