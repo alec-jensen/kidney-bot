@@ -76,12 +76,12 @@ class Automod(commands.Cog):
 
                 return detections
 
-    async def check_whitelist(self, user_or_channel: discord.User or discord.TextChannel):
-        doc = await self.bot.database.automodsettings.find_one({'guild': user_or_channel.guild.id})
+    async def check_whitelist(self, member_or_channel: discord.Member or discord.TextChannel):
+        doc = await self.bot.database.automodsettings.find_one({'guild': member_or_channel.guild.id})
         if doc is None:
             return False
 
-        return user_or_channel.id in doc.get('whitelist', [])
+        return member_or_channel.id in doc.get('whitelist', [])
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -89,20 +89,6 @@ class Automod(commands.Cog):
         if self.bot.config.perspective_api_key is None:
             logging.warning(
                 'Perspective API key not set. AI detection will not work.')
-
-    @commands.Cog.listener()
-    async def on_member_join(self, member: discord.Member):
-        if member.bot:
-            return
-
-        doc = await self.bot.database.audit_log_undo.find_one({'type': 'restore_on_join', 'guild_id': member.guild.id, 'user_id': member.id})
-        if doc is not None:
-            member_roles = []
-            for role_id in doc.get('roles'):
-                member_roles.append(member.guild.get_role(role_id))
-
-            await member.add_roles(*member_roles, reason='Restored roles from moderation action undo.')
-            await member.edit(nick=doc.get('nick'), reason='Restored nickname from moderation action undo.')
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
@@ -263,7 +249,8 @@ class Automod(commands.Cog):
 
                 await user.remove_roles(*roles)
                 await self.bot.log(guild, 'Automod', 'Permissions Timeout',
-                                   f'User {user} was removed from role(s) {", ".join([role.mention for role in roles])} due to permissions timeout.',
+                                   f'User {user} was removed from role(s) {", ".join(
+                                       [role.mention for role in roles])} due to permissions timeout.',
                                    user=guild.me, target=user)
                 await user.send(f'In the server {guild.name}, you were removed from role(s) {", ".join([role.name for role in roles])} due to permissions timeout.')
 
@@ -315,7 +302,8 @@ class Automod(commands.Cog):
                 await after.remove_roles(*roles)
                 if len(roles) > 0:
                     await self.bot.log(after.guild, 'Automod', 'Permissions Timeout',
-                                       f'User {after} was removed from role(s) {", ".join([role.mention for role in roles])} due to permissions timeout.',
+                                       f'User {after} was removed from role(s) {", ".join(
+                                           [role.mention for role in roles])} due to permissions timeout.',
                                        user=after.guild.me, target=after)
                     await after.send(f'In the server {after.guild.name}, you were removed from role(s) {", ".join([role.name for role in roles])} due to permissions timeout.')
 
@@ -463,7 +451,7 @@ class Automod(commands.Cog):
         await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'whitelist': doc['whitelist']}})
 
 
-async def setup(bot):
+async def setup(bot: KidneyBot):
     automod = Automod(bot)
     if bot.config.perspective_api_key is None:
         automod.auto_mod = None

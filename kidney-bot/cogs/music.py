@@ -57,15 +57,15 @@ class Music(commands.Cog):
             return None
         return [entry["webpage_url"] for entry in info["entries"]] if get_url else info
 
-    async def play_song(self, interaction, song):
-        voice = interaction.guild.voice_client
+    async def play_song(self, interaction: discord.Interaction, song):
+        voice: discord.VoiceProtocol = interaction.guild.voice_client
         if not voice:
             await interaction.user.voice.channel.connect()
             voice = interaction.guild.voice_client
         url = pafy.new(song).getbestaudio().url
         voice.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5")),
                    after=lambda error: self.bot.loop.create_task(self.check_queue(interaction)))
-        interaction.guild.voice_client.source.volume = 0.5
+        voice.source.volume = 0.5
 
     @app_commands.command(name='play', description='Play a song')
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
