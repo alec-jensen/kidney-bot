@@ -137,7 +137,7 @@ class ActiveGuard(commands.Cog):
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
-        doc = asyncio.create_task(self.bot.database.activeguardsettings.find_one({"guild_id": after.guild.id}))
+        doc = asyncio.create_task(self.bot.database.activeguardsettings.find_one({"guild_id": before.guild.id}))
         user_doc = asyncio.create_task(self.bot.database.scammer_list.find_one({"user": after.author.id}))
 
         if after.channel.type is discord.ChannelType.private:
@@ -149,19 +149,19 @@ class ActiveGuard(commands.Cog):
 
         if doc is not None and doc.get('block_known_spammers') is True:
             if await user_doc is not None:
-                await member.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
+                await member.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await member.ban(reason="User is on global blacklist.")
-                await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
+                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=member)
     
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         user_doc = asyncio.create_task(self.bot.database.scammer_list.find_one({"user": after.id}))
-        doc = await self.bot.database.activeguardsettings.find_one({"guild_id": after.guild.id})
+        doc = await self.bot.database.activeguardsettings.find_one({"guild_id": before.guild.id})
         if doc is not None and doc.get('block_known_spammers') is True:
             if await user_doc is not None:
-                await after.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
+                await after.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await after.ban(reason="User is on global blacklist.")
-                await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
+                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
 
     @commands.Cog.listener()
     async def on_user_update(self, before: discord.User, after: discord.User):
@@ -169,9 +169,9 @@ class ActiveGuard(commands.Cog):
         doc = await self.bot.database.activeguardsettings.find_one({"guild_id": after.id})
         if doc is not None and doc.get('block_known_spammers') is True:
             if await user_doc is not None:
-                await after.send(f'You have been banned from {after.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
+                await after.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
                 await after.ban(reason="User is on global blacklist.")
-                await self.bot.log(after.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
+                await self.bot.log(before.guild, 'Automod', 'Remove blacklisted user', 'User is on gobal blacklist. Blocking blacklisted users is enabled.', user=after)
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
