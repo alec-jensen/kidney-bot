@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # TODO: update to python 3.12
-FROM python:3.11.0-slim-bullseye
+FROM python:3.12-slim-bullseye
 WORKDIR /app
 COPY requirements.txt requirements.txt
 RUN apt update

@@ -13,7 +13,6 @@ import time
 
 from _version import __version__
 
-from utils import kidney_bot
 from utils.kidney_bot import KidneyBot, KBMember, KBUser
 from utils.log_formatter import LogFormatter, LogFileFormatter
 
