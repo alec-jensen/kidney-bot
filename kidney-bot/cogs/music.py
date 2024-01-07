@@ -69,7 +69,6 @@ class Music(commands.Cog):
 
     @app_commands.command(name='play', description='Play a song')
     @app_commands.checks.cooldown(1, 20, key=lambda i: i.user.id)
-    @app_commands.checks.bot_has_guild_permissions(connect=True, speak=True)
     @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, *, song: str):
         if not interaction.user.voice:
