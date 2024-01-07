@@ -10,11 +10,13 @@ import os
 import logging
 import datetime
 import time
+import regex as re
 
 from _version import __version__
 
 from utils.kidney_bot import KidneyBot, KBMember, KBUser
 from utils.log_formatter import LogFormatter, LogFileFormatter
+from utils.checks import is_owner
 
 time_start = time.perf_counter_ns()
 
@@ -39,7 +41,6 @@ fileHandler.setFormatter(logFileFormatter)
 rootLogger.addHandler(fileHandler)
 
 bot: KidneyBot = KidneyBot(
-    command_prefix=commands.when_mentioned_or('kb.'),
     intents=discord.Intents.all()
 )
 
@@ -95,14 +96,14 @@ async def on_guild_join(guild: discord.Guild):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def testLog(ctx, actiontype, action, reason, user: discord.User):
     """Internal command for testing the log function."""
     await bot.log(ctx.guild, actiontype, action, reason, user)
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def load(ctx, extension: str):
     """Load a cog."""
     try:
@@ -115,7 +116,7 @@ async def load(ctx, extension: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def unload(ctx, extension: str):
     """Unload a cog."""
     try:
@@ -128,7 +129,7 @@ async def unload(ctx, extension: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def reload(ctx, extension: str):
     """Reload a cog."""
     try:
@@ -148,7 +149,7 @@ async def reload(ctx, extension: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def say(ctx, *, text: str):
     """Make the bot say something."""
     try:
@@ -159,7 +160,7 @@ async def say(ctx, *, text: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def reply(ctx, message: str, *, text: str):
     """Make the bot reply to a message."""
     try:
@@ -172,7 +173,7 @@ async def reply(ctx, message: str, *, text: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def react(ctx, message: str, reaction: str):
     """Make the bot react to a message."""
     try:
@@ -185,7 +186,7 @@ async def react(ctx, message: str, reaction: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def announce(ctx, *, message: str):
     """Send a global message to all server owners."""
     await ctx.reply(f'Sent global message\n```{message}```')
@@ -198,14 +199,14 @@ async def announce(ctx, *, message: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def raiseexception(ctx):
     """Internal command for testing error handling."""
     raise Exception('artificial exception raised')
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def serverban(ctx, guild: discord.Guild, *, text: str):
     """Ban a server from using the bot."""
     n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
@@ -233,7 +234,7 @@ async def serverban(ctx, guild: discord.Guild, *, text: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def serverunban(ctx, guild: str):
     """Unban a server from using the bot."""
     n = await bot.database.serverbans.count_documents({"id": guild})
@@ -245,7 +246,7 @@ async def serverunban(ctx, guild: str):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def createinvite(ctx, guild: discord.Guild):
     """Create an invite to a server."""
     invite = None
@@ -263,7 +264,7 @@ async def createinvite(ctx, guild: discord.Guild):
 
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def reloadconfig(ctx):
     """Reload the config file."""
     try:
@@ -275,47 +276,49 @@ async def reloadconfig(ctx):
     await ctx.reply("Reloaded config file.")
 
 @bot.command()
-@bot.is_owner()
+@is_owner()
 async def guild_debug_info(ctx: commands.Context, guild: discord.Guild = None):
     message = await ctx.send("Generating debug report...")
     if guild is None:
         guild = ctx.guild
 
-    embed = discord.Embed(title=f"Debug report for {guild}({guild.id})", color=discord.Color.blurple())
-    embed.add_field(name=guild.name, value=f"""**Owner:** {guild.owner}({guild.owner_id})
-                    **Created:** <t:{guild.created_at.timestamp}>
-                    **Members:** {guild.member_count}""")
+    embed = discord.Embed(title=f"Debug report for {guild} ({guild.id})", color=discord.Color.blurple())
+    embed.add_field(name=guild.name, value=f"""**Owner:** {guild.owner.mention} ({guild.owner_id})
+                    **Created:** <t:{int(guild.created_at.timestamp())}>
+                    **Members:** {guild.member_count}
+                    **Non-bot members:** {len([m for m in guild.members if not m.bot])}
+                    **Bots:** {len([m for m in guild.members if m.bot])}""")
     
     possible_issues = []
 
-    # Check if bot has the correct permissions
-    permissions = guild.me.guild_permissions
-    missing_permissions = []
-
-    if not permissions.administrator:
-        missing_permissions.append("Administrator")
-    if not permissions.manage_messages:
-        missing_permissions.append("Manage Messages")
-    if not permissions.kick_members:
-        missing_permissions.append("Kick Members")
-    if not permissions.ban_members:
-        missing_permissions.append("Ban Members")
-    if not permissions.manage_nicknames:
-        missing_permissions.append("Manage Nicknames")
-    
-    if len(missing_permissions) > 0:
-        possible_issues.append(f"Missing permissions: {', '.join(missing_permissions)}")
+    if not guild.me.guild_permissions.administrator:
+        possible_issues.append("Bot does not have administrator permissions.")
 
     # Check if bot's role is above normal members
-    top_role_pos = len(guild.me.roles) - 1
+    top_role = guild.me.top_role
 
-    for i, role in enumerate(guild.roles):
-        if i < top_role_pos: pass
+    def _role_is_moderator(role: discord.Role) -> bool:
+        return role.permissions.administrator or role.permissions.manage_guild or role.permissions.manage_channels \
+            or role.permissions.manage_roles or role.permissions.manage_messages or role.permissions.ban_members or \
+                role.permissions.kick_members or role.permissions.manage_nicknames or role.permissions.manage_webhooks
 
-        role_perms = role.permissions
+    for role in guild.roles:
+        if not _role_is_moderator(role):
+            if role.position > top_role.position:
+                possible_issues.append(f"Bot's role ({top_role.mention}) is below a normal member role ({role.mention}).")
+                
+    highest_member_role = None
+    for role in guild.roles:
+        if not _role_is_moderator(role):
+            if highest_member_role is None or role.position > highest_member_role.position:
+                if re.search(r'member|access|fans', role.name, re.IGNORECASE):
+                    highest_member_role = role
 
-        if not role_perms.manage_messages or not role_perms.manage_nicknames:
-            possible_issues.append(f"Role may not be above normal members. Found {role.mention} above me.")
+    if highest_member_role is not None:
+        for role in guild.roles:
+            if _role_is_moderator(role):
+                if role.position < highest_member_role.position:
+                    possible_issues.append(f"Moderation role ({role.mention}) is below a member role ({highest_member_role.mention}).")
 
     # TODO: check database for issues
 
@@ -324,7 +327,7 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild = None):
     else:
         embed.add_field(name="Possible issues:", value="\n".join(possible_issues))
 
-    embed.set_footer(text=f"Debug report for {guild.name}", icon_url=guild.icon.url)
+    embed.set_footer(text=f"Debug report for {guild.name}", icon_url=None if guild.icon is None else guild.icon.url)
 
     await message.edit(content="", embed=embed)
 

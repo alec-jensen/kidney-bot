@@ -16,18 +16,28 @@ class Config:
         try:
             self.token: str = self.conf_json['token']
             self.dbstring: str = self.conf_json['dbstring']
-            self.owner_id: int | None = convert_except_none(
-                self.conf_json.get('ownerid'), int)
+
+            if type(self.conf_json.get('ownerid')) == list:
+                self.owner_id = None
+                self.owner_ids = set([convert_except_none(
+                    i, int) for i in self.conf_json.get('ownerid') if i is not None])
+            else:
+                self.owner_id = convert_except_none(
+                    self.conf_json.get('ownerid'), int)
+                self.owner_ids = None
+
             self.report_channel: int | None = convert_except_none(
                 self.conf_json.get('report_channel'), int)
             if self.report_channel is None:
                 logging.warning(
                     'No report channel configured, user reports will be disabled.')
+                
             self.perspective_api_key: str | None = self.conf_json.get(
                 'perspective_api_key')
             if self.perspective_api_key is None:
                 logging.warning(
                     'No Perspective API key configured, perspective will be disabled.')
+                
             self.error_channel: int | None = convert_except_none(
                 self.conf_json.get('error_channel'), int)
             if self.error_channel is None:
@@ -35,6 +45,8 @@ class Config:
                     'No error channel configured, errors will only be logged to console.')
             self.user_count_channel_id: int | None = convert_except_none(
                 self.conf_json.get('user_count_channel'), int)
+
+            self.prefix = self.conf_json.get('prefix', 'kb.')
         except KeyError as e:
             raise KeyError(f'Config file is missing a required option: {e}')
 

@@ -10,6 +10,7 @@ import logging
 
 from utils.database import Database
 from utils.kidney_bot import KidneyBot
+from utils.checks import is_owner
 
 
 class UserProfile:
@@ -54,13 +55,13 @@ class Economy(commands.Cog):
         logging.info('Economy cog loaded.')
 
     @commands.command()
-    @commands.is_owner()
+    @is_owner()
     async def resetuser(self, ctx, user: discord.User):
         await self.bot.database.currency.delete_one({'userID': str(user.id)})
         await ctx.send('User removed successfully!')
 
     @commands.command()
-    @commands.is_owner()
+    @is_owner()
     async def addmoney(self, ctx, user: discord.User, amount: int):
         await self.bot.add_currency(user, amount, 'wallet')
 

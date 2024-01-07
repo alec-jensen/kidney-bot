@@ -25,7 +25,7 @@ class Music(commands.Cog):
     async def on_ready(self):
         logging.info('Music cog loaded.')
 
-    async def basic_checks(self, interaction):
+    async def basic_checks(self, interaction: discord.Interaction):
         if interaction.guild.voice_client is None:
             return await interaction.response.send_message("I am not playing any song.", ephemeral=True)
         if interaction.user.voice is None:
@@ -37,7 +37,7 @@ class Music(commands.Cog):
         else:
             return True
 
-    async def check_queue(self, interaction):
+    async def check_queue(self, interaction: discord.Interaction):
         try:
             if len(self.queue[interaction.guild.id]) > 0:
                 interaction.guild.voice_client.stop()
@@ -79,7 +79,7 @@ class Music(commands.Cog):
             await interaction.user.voice.channel.connect()
             voice = interaction.guild.voice_client
         await interaction.response.send_message("Searching for song, this may take a few seconds.")
-        
+
         if not ("youtube.com" in song or "youtu.be" in song):
             result = await self.search_song(song, get_url=True)
             if result is None:

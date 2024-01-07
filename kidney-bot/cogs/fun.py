@@ -89,7 +89,7 @@ class Fun(commands.Cog):
         def check(m):
             return m.content.lower() in ['r', 'p', 's'] and m.channel == interaction.channel and m.author == interaction.user
 
-        message = await self.bot.wait_for('message', check=check, timeout=15)
+        message: discord.Message = await self.bot.wait_for('message', check=check, timeout=15)
         player = ['r', 'p', 's'].index(message.content.lower())
         while True:
             computer = random.randint(0, 2)

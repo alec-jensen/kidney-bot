@@ -5,6 +5,7 @@ import logging
 from typing import Literal
 
 from utils.kidney_bot import KidneyBot
+from utils.views import Confirm
 
 
 class Autorole(commands.Cog):
@@ -41,7 +42,7 @@ class Autorole(commands.Cog):
                         await member.add_roles(discord_role)
 
     @commands.Cog.listener()
-    async def on_member_join(self, member):
+    async def on_member_join(self, member: discord.Member):
         doc: dict = await self.bot.database.autorole_settings.find_one({'guild': member.guild.id})
         if doc is None:
             return
@@ -76,23 +77,47 @@ class Autorole(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(role='The role to add to the autorole list.', delay='The delay in seconds before the role is given to the user.')
     async def add(self, interaction: discord.Interaction, role: discord.Role, delay: int = 0):
+        if role.position >= interaction.guild.me.top_role.position:
+            await interaction.response.send_message(f'Cannot add {role.mention} to the autorole list, it is higher than my top role.', ephemeral=True)
+            return
+        
+        def _role_is_moderator(role: discord.Role) -> bool:
+            return role.permissions.administrator or role.permissions.manage_guild or role.permissions.manage_channels \
+                or role.permissions.manage_roles or role.permissions.manage_messages or role.permissions.ban_members or \
+                    role.permissions.kick_members or role.permissions.manage_nicknames or role.permissions.manage_webhooks
+        
+        if _role_is_moderator(role):
+            view = Confirm()
+
+            await interaction.response.send_message(
+                f'It appears the role {role.mention} has moderation permissions.\n**If you add this role, EVERY MEMBER OF THIS SERVER WILL RECIEVE IT**',
+                ephemeral=True, view=view)
+            
+            await view.wait()
+            if view.value is None or not view.value:
+                return
+        
         doc = await self.bot.database.autorole_settings.find_one({'guild': interaction.guild.id})
         if doc is None:
             await self.bot.database.autorole_settings.insert_one({'guild': interaction.guild.id, 'roles': [{'id': role.id, 'delay': 0}]})
         else:
             doc['roles'].append({'id': role.id, 'delay': delay})
             await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
-        await interaction.response.send_message(f'Added {role} to the autorole list.', ephemeral=True)
 
         if doc is None:
             return
 
-        for role in doc.get('roles', []):
-            discord_role = interaction.guild.get_role(role['id'])
+        for _role in doc.get('roles', []):
+            discord_role = interaction.guild.get_role(_role['id'])
             if discord_role is None:
-                doc['roles'].remove(role)
+                doc['roles'].remove(_role)
 
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
+
+        if _role_is_moderator(role):
+            await interaction.edit_original_response(content=f'Added {role} to the autorole list.', view=None)
+        else:
+            await interaction.response.send_message(f'Added {role} to the autorole list.', ephemeral=True)
 
     @autorole.command(name='remove', description='Remove a role from the autorole list.')
     @app_commands.default_permissions(manage_guild=True)

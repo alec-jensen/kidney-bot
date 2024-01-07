@@ -12,6 +12,9 @@ from utils.database import Database, Schemas
 
 import logging
 
+def get_prefix(bot: commands.Bot, message: discord.Message) -> str:
+    return commands.when_mentioned_or(bot.config.prefix)(bot, message)
+
 
 class KidneyBot(commands.Bot):
     """The main bot class. This is a subclass of commands.Bot, and is used to
@@ -19,10 +22,10 @@ class KidneyBot(commands.Bot):
 
     instance: 'KidneyBot' or None = None
 
-    def __init__(self, command_prefix, intents):
+    def __init__(self, intents):
         self.config: Config = Config()
         super().__init__(
-            command_prefix=command_prefix,
+            command_prefix=get_prefix,
             owner_id=self.config.owner_id,
             intents=intents
         )
@@ -78,24 +81,10 @@ class KidneyBot(commands.Bot):
                               description=f'{action}\n**User:** {user.mention} ({user.id})\n' +
                               (f"**Target:** {target.mention} ({target.id})" if target is not None else "") +
                               (f"\n**Reason:** {reason}\n" if reason is not None else "") +
-                              (f'**Message:** ```{
-                               message.content}```' if message is not None else ''),
+                              (f'**Message:** ```{message.content}```' if message is not None else ''),
                               color=color)
         embed.set_footer(text=f'Automated logging by kidney bot')
         return await self.get_channel(doc['log_channel']).send(embed=embed)
-
-    # Decorators
-
-    """
-    Check if the user is the owner of the bot.
-    This is different from the is_owner() check in
-    discord.py because it works after config reloads.
-    """
-
-    def is_owner(self) -> commands.check:
-        async def predicate(ctx: commands.Context):
-            return ctx.author.id == self.config.owner_id
-        return commands.check(predicate)
 
 
 class _OptimisticUser:
