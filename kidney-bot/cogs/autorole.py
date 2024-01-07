@@ -101,6 +101,11 @@ class Autorole(commands.Cog):
         if doc is None:
             await self.bot.database.autorole_settings.insert_one({'guild': interaction.guild.id, 'roles': [{'id': role.id, 'delay': 0}]})
         else:
+            for role_dict in doc['roles']:
+                if role_dict['id'] == role.id:
+                    await interaction.response.send_message(f'{role} is already in the autorole list.', ephemeral=True)
+                    return
+                
             doc['roles'].append({'id': role.id, 'delay': delay})
             await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
 

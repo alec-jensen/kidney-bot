@@ -73,9 +73,8 @@ class Schemas:
             })
 
     class AiDetection(BaseSchema):
-        def __init__(self, guild: int = None, channel_id: int = None, enabled: bool = None, TOXICITY: int = None, SEVERE_TOXICITY: int = None, IDENTITY_ATTACK: int = None, INSULT: int = None, PROFANITY: int = None, THREAT: int = None, FLIRTATION: int = None, OBSCENE: int = None, SPAM: int = None) -> None:
+        def __init__(self, guild: int = None, enabled: bool = None, TOXICITY: int = None, SEVERE_TOXICITY: int = None, IDENTITY_ATTACK: int = None, INSULT: int = None, PROFANITY: int = None, THREAT: int = None, FLIRTATION: int = None, OBSCENE: int = None, SPAM: int = None) -> None:
             self.guild_id: int | None = convert_except_none(guild, int)
-            self.channel_id: int | None = convert_except_none(channel_id, int)
             self.enabled: bool | None = convert_except_none(enabled, bool)
             self.TOXICITY: int | None = convert_except_none(TOXICITY, int)
             self.SEVERE_TOXICITY: int | None = convert_except_none(
@@ -94,7 +93,7 @@ class Schemas:
             if data is None:
                 return cls()
 
-            return cls(data.get('guild_id'), data.get('channel_id'), data.get('enabled'),
+            return cls(data.get('guild_id'), data.get('enabled'),
                        data.get('TOXICITY'), data.get(
                            'SEVERE_TOXICITY'), data.get('IDENTITY_ATTACK'),
                        data.get('INSULT'), data.get(
@@ -104,7 +103,6 @@ class Schemas:
         def to_dict(self) -> dict:
             return remove_none_values({
                 'guild_id': self.guild_id,
-                'channel_id': self.channel_id,
                 'enabled': self.enabled,
                 'TOXICITY': self.TOXICITY,
                 'SEVERE_TOXICITY': self.SEVERE_TOXICITY,
@@ -259,11 +257,11 @@ class Schemas:
             })
 
     class AutoRoleSettings(BaseSchema):
-        def __init__(self, guild: int = None, roles: list['Schemas.RoleSchema'] = None, BotsGetRoles: bool = None) -> None:
+        def __init__(self, guild: int = None, roles: list['Schemas.RoleSchema'] = None, bots_get_roles: bool = None) -> None:
             self.guild: int | None = convert_except_none(guild, int)
             self.roles: list['Schemas.RoleSchema'] | None = roles
-            self.BotsGetRoles: bool | None = convert_except_none(
-                BotsGetRoles, bool)
+            self.bots_get_roles: bool | None = convert_except_none(
+                bots_get_roles, bool)
 
         @classmethod
         def from_dict(cls, data: dict) -> 'Schemas.AutoRoleSettings':
@@ -276,7 +274,7 @@ class Schemas:
             return remove_none_values({
                 'guild': self.guild,
                 'roles': self.roles,
-                'BotsGetRoles': self.BotsGetRoles
+                'BotsGetRoles': self.bots_get_roles
             })
 
     class ExceptionSchema(BaseSchema):
