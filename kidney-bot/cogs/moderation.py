@@ -64,15 +64,17 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='nickname', description="Change nicknames")
     @app_commands.default_permissions(manage_nicknames=True)
+    @app_commands.guild_only()
     async def nickname(self, interaction: discord.Interaction, user: discord.Member, *, newnick: str):
+        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
-            interaction.response.send_message(
+            interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
             return
         try:
             await user.edit(nick=newnick)
         except discord.errors.Forbidden:
-            await interaction.response.send_message('Missing required permissions. Is the user above me?', ephemeral=True)
+            await interaction.followup.send('Missing required permissions. Is the user above me?', ephemeral=True)
         else:
             embed = discord.Embed(
                 title=f"Nickname change result", description=None, color=discord.Color.green())
@@ -82,10 +84,11 @@ class Moderation(commands.Cog):
             embed.add_field(name="New nickname", value=newnick, inline=False)
             embed.set_footer(
                 text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-            await interaction.response.send_message(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+            await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
 
     @app_commands.command(name='purge', description="Purge messages")
     @app_commands.default_permissions(manage_messages=True)
+    @app_commands.guild_only()
     async def purge(self, interaction: discord.Interaction, limit: int, user: discord.Member = None):
         await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         msg = []
@@ -108,9 +111,11 @@ class Moderation(commands.Cog):
 
     @app_commands.command(name='mute', description="Mute users")
     @app_commands.default_permissions(mute_members=True)
+    @app_commands.guild_only()
     async def mute(self, interaction: discord.Interaction, user: discord.Member, *, reason: str = None):
+        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
-            interaction.response.send_message(
+            interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
             return
 
@@ -122,13 +127,15 @@ class Moderation(commands.Cog):
         embed.add_field(name="Muted", value=user.mention, inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.response.send_message(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
 
     @app_commands.command(name='unmute', description="Unmute users")
     @app_commands.default_permissions(mute_members=True)
+    @app_commands.guild_only()
     async def unmute(self, interaction: discord.Interaction, user: discord.Member):
+        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
-            interaction.response.send_message(
+            interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
             return
         # eventually, we will detect mutes from tempmutes
@@ -142,21 +149,23 @@ class Moderation(commands.Cog):
         embed.add_field(name="Unmuted", value=user.mention, inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.response.send_message(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
 
     @app_commands.command(name='tempmute', description="Timeout users")
     @app_commands.default_permissions(mute_members=True)
+    @app_commands.guild_only()
     async def tempmute(self, interaction: discord.Interaction, user: discord.Member, time: str, *, reason: str = None):
+        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
-            interaction.response.send_message(
+            interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
             return
         seconds = await self.convert_time_to_seconds(time)
         if seconds is False:
-            await interaction.response.send_message('Invalid time!', ephemeral=True)
+            await interaction.followup.send('Invalid time!', ephemeral=True)
             return
         if seconds > 1209600:
-            await interaction.response.send_message('Timeouts can only be 2 weeks max!', ephemeral=True)
+            await interaction.followup.send('Timeouts can only be 2 weeks max!', ephemeral=True)
             return
         until = timedelta(seconds=await self.convert_time_to_seconds(time))
         await user.timeout(until, reason=reason)
@@ -168,13 +177,14 @@ class Moderation(commands.Cog):
         embed.add_field(name="Duration", value=time_formatted, inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.response.send_message(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         await user.send(f"You have been muted in **{interaction.guild}** for *{time_formatted}*")
 
     @app_commands.command(name='kick', description="Kick users")
     @app_commands.describe(users="The users to kick. Can be multiple users, comma separated.")
     @app_commands.describe(delete_message_time="The time to delete messages from the user. Can be up to 7 days.")
     @app_commands.default_permissions(kick_members=True)
+    @app_commands.guild_only()
     async def kick(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
         interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]
@@ -222,6 +232,7 @@ class Moderation(commands.Cog):
     @app_commands.describe(users="The users to ban. Can be multiple users, comma separated.")
     @app_commands.describe(delete_message_time="The time to delete messages from the user. Can be up to 7 days.")
     @app_commands.default_permissions(ban_members=True)
+    @app_commands.guild_only()
     async def ban(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
         interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
 
@@ -267,6 +278,7 @@ class Moderation(commands.Cog):
     @app_commands.command(name='unban', description="Unban users")
     @app_commands.describe(users="The users to unban. Can be multiple users, comma separated.")
     @app_commands.default_permissions(ban_members=True)
+    @app_commands.guild_only()
     async def unban(self, interaction: discord.Interaction, users: str, reason: str = None):
         interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]

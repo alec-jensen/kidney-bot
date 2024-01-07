@@ -16,7 +16,7 @@ from _version import __version__
 
 from utils.kidney_bot import KidneyBot, KBMember, KBUser
 from utils.log_formatter import LogFormatter, LogFileFormatter
-from utils.checks import is_owner
+from utils.checks import is_bot_owner
 
 time_start = time.perf_counter_ns()
 
@@ -96,14 +96,14 @@ async def on_guild_join(guild: discord.Guild):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def testLog(ctx, actiontype, action, reason, user: discord.User):
     """Internal command for testing the log function."""
     await bot.log(ctx.guild, actiontype, action, reason, user)
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def load(ctx, extension: str):
     """Load a cog."""
     try:
@@ -116,7 +116,7 @@ async def load(ctx, extension: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def unload(ctx, extension: str):
     """Unload a cog."""
     try:
@@ -129,7 +129,7 @@ async def unload(ctx, extension: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def reload(ctx, extension: str):
     """Reload a cog."""
     try:
@@ -149,7 +149,7 @@ async def reload(ctx, extension: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def say(ctx, *, text: str):
     """Make the bot say something."""
     try:
@@ -160,7 +160,7 @@ async def say(ctx, *, text: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def reply(ctx, message: str, *, text: str):
     """Make the bot reply to a message."""
     try:
@@ -173,7 +173,7 @@ async def reply(ctx, message: str, *, text: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def react(ctx, message: str, reaction: str):
     """Make the bot react to a message."""
     try:
@@ -186,7 +186,7 @@ async def react(ctx, message: str, reaction: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def announce(ctx, *, message: str):
     """Send a global message to all server owners."""
     await ctx.reply(f'Sent global message\n```{message}```')
@@ -199,14 +199,14 @@ async def announce(ctx, *, message: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def raiseexception(ctx):
     """Internal command for testing error handling."""
     raise Exception('artificial exception raised')
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def serverban(ctx, guild: discord.Guild, *, text: str):
     """Ban a server from using the bot."""
     n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
@@ -234,7 +234,7 @@ async def serverban(ctx, guild: discord.Guild, *, text: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def serverunban(ctx, guild: str):
     """Unban a server from using the bot."""
     n = await bot.database.serverbans.count_documents({"id": guild})
@@ -246,7 +246,7 @@ async def serverunban(ctx, guild: str):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def createinvite(ctx, guild: discord.Guild):
     """Create an invite to a server."""
     invite = None
@@ -264,7 +264,7 @@ async def createinvite(ctx, guild: discord.Guild):
 
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def reloadconfig(ctx):
     """Reload the config file."""
     try:
@@ -276,7 +276,7 @@ async def reloadconfig(ctx):
     await ctx.reply("Reloaded config file.")
 
 @bot.command()
-@is_owner()
+@is_bot_owner()
 async def guild_debug_info(ctx: commands.Context, guild: discord.Guild = None):
     message = await ctx.send("Generating debug report...")
     if guild is None:

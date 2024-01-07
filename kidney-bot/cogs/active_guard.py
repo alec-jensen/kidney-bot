@@ -197,10 +197,11 @@ class ActiveGuard(commands.Cog):
                 await self.bot.log(channel.guild, 'Automod', 'Remove blacklisted user', 'User is on global blacklist. Blocking blacklisted users is enabled.', user=user)
 
     active_guard = app_commands.Group(name='activeguard', description='Manage ActiveGuard settings',
-                                      default_permissions=discord.Permissions(manage_guild=True))
+                                      default_permissions=discord.Permissions(manage_guild=True), guild_only=True)
 
     @active_guard.command(name='block_spammers', description='Should ActiveGuard block known spammers?')
     async def block_known_spammers(self, interaction: discord.Interaction, state: Literal['on', 'off']):
+        await interaction.response.defer(ephemeral=True)
         # Check if the guild has a document in the database, if not create one
         if await self.bot.database.activeguardsettings.find_one({"guild_id": interaction.guild.id}) is None:
             await self.bot.database.activeguardsettings.insert_one({"guild_id": interaction.guild.id})
@@ -208,23 +209,24 @@ class ActiveGuard(commands.Cog):
         if state == 'on':
             await self.bot.database.activeguardsettings.update_one({"guild_id": interaction.guild.id},
                                                       {"$set": {"block_known_spammers": True}})
-            await interaction.response.send_message('ActiveGuard will now block known spammers.', ephemeral=True)
+            await interaction.followup.send('ActiveGuard will now block known spammers.', ephemeral=True)
         else:
             await self.bot.database.activeguardsettings.update_one({"guild_id": interaction.guild.id},
                                                       {"$set": {"block_known_spammers": False}})
-            await interaction.response.send_message('ActiveGuard will no longer block known spammers.', ephemeral=True)
+            await interaction.followup.send('ActiveGuard will no longer block known spammers.', ephemeral=True)
 
     @app_commands.command(name='report', description='report scammers')
     async def report_command(self, interaction: discord.Interaction, user: discord.User, reason: str,
                              message_id: int = None):
+        await interaction.response.defer(ephemeral=True)
         report_id = uuid.uuid4()
-        message = interaction.channel.fetch_message(message_id) if message_id is not None else None
+        message = await interaction.channel.fetch_message(message_id) if message_id is not None else None
         if message is not None and message.author != user:
-            interaction.response.send_message('The provided message isn\'t from the user whom you are trying to report!', ephemeral=True)
+            interaction.followup.send('The provided message isn\'t from the user whom you are trying to report!', ephemeral=True)
             return
         doc = await self.bot.database.scammer_list.find_one({"user": user.id})
         if doc is not None:
-            await interaction.response.send_message('User already blacklisted.', ephemeral=True)
+            await interaction.followup.send('User already blacklisted.', ephemeral=True)
             return
         embed = discord.Embed(title=f'{interaction.user} has submitted a report!', color=discord.Color.red())
         embed.add_field(name=f'Suspect: {user.name}#{user.discriminator}({user.id})',
@@ -245,7 +247,7 @@ class ActiveGuard(commands.Cog):
             "report_status": None,
             "handled_by": None
         })
-        await interaction.response.send_message('Report submitted! Thank you.', ephemeral=True)
+        await interaction.followup.send('Report submitted! Thank you.', ephemeral=True)
 
 
 async def setup(bot):

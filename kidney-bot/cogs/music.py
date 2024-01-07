@@ -68,7 +68,9 @@ class Music(commands.Cog):
         voice.source.volume = 0.5
 
     @app_commands.command(name='play', description='Play a song')
-    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(1, 20, key=lambda i: i.user.id)
+    @app_commands.checks.bot_has_guild_permissions(connect=True, speak=True)
+    @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, *, song: str):
         if not interaction.user.voice:
             await interaction.response.send_message('You must be connected to a voice channel to use this command!',
@@ -97,6 +99,7 @@ class Music(commands.Cog):
             await interaction.edit_original_response(content=f"Now playing: {song}")
 
     @app_commands.command(name='leave', description='Have the bot leave the current voice channel.')
+    @app_commands.guild_only()
     async def leave(self, interaction: discord.Interaction):
         if not await self.basic_checks(interaction):
             return
@@ -113,6 +116,7 @@ class Music(commands.Cog):
             await interaction.response.send_message("I am not in any voice channel!", ephemeral=True)
 
     @app_commands.command(name='pause', description='Pause the currently playing song')
+    @app_commands.guild_only()
     async def pause(self, interaction: discord.Interaction):
         if not await self.basic_checks(interaction):
             return
@@ -125,6 +129,7 @@ class Music(commands.Cog):
                 "No audio is playing.", ephemeral=True)
 
     @app_commands.command(name='resume', description='Resume playing the current song')
+    @app_commands.guild_only()
     async def resume(self, interaction: discord.Interaction):
         if not await self.basic_checks(interaction):
             return
@@ -137,6 +142,7 @@ class Music(commands.Cog):
                 "No audio is paused.", ephemeral=True)
 
     @app_commands.command(name='stop', description='Stop playing the current song')
+    @app_commands.guild_only()
     async def stop(self, interaction: discord.Interaction):
         if not await self.basic_checks(interaction):
             return
@@ -149,6 +155,7 @@ class Music(commands.Cog):
         await interaction.response.send_message('Stopped.', ephemeral=True)
 
     @app_commands.command(name='queue', description='See the songs in the queue')
+    @app_commands.guild_only()
     async def queue(self, interaction: discord.Interaction):
         if not await self.basic_checks(interaction):
             return
@@ -167,6 +174,7 @@ class Music(commands.Cog):
         await interaction.response.send_message(embed=embed)
 
     @app_commands.command(name='skip', description='Skip the current song')
+    @app_commands.guild_only()
     async def skip(self, interaction):
         if not await self.basic_checks(interaction):
             return
@@ -218,6 +226,7 @@ class Music(commands.Cog):
 
     @app_commands.command(name='forceskip', description="Force skip song.")
     @app_commands.default_permissions(manage_messages=True)
+    @app_commands.guild_only()
     async def forceskip(self, interaction: discord.Interaction):
         if not await self.basic_checks(interaction):
             return

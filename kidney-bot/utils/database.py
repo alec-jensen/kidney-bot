@@ -116,22 +116,32 @@ class Schemas:
             })
 
     class AutoModSettings(BaseSchema):
-        def __init__(self, guild: int = None, log_channel: int = None) -> None:
+        def __init__(self, guild: int = None, log_channel: int = None, whitelist: list[int] = None, permissions_timeout: int = None, permissions_timeout_whitelist: list[int] = None) -> None:
             self.guild: int | None = convert_except_none(guild, int)
             self.log_channel: int | None = convert_except_none(
                 log_channel, int)
+            self.whitelist: list[int] | None = convert_except_none(whitelist, list)
+            self.permissions_timeout: int | None = convert_except_none(
+                permissions_timeout, int)
+            self.permissions_timeout_whitelist: list[int] | None = convert_except_none(
+                permissions_timeout_whitelist, list)
 
         @classmethod
         def from_dict(cls, data: dict) -> 'Schemas.AutoModSettings':
             if data is None:
                 return cls()
 
-            return cls(data.get('guild'), data.get('log_channel'))
+            return cls(data.get('guild'), data.get('log_channel'),
+                       data.get('whitelist'), data.get('permissions_timeout'),
+                       data.get('permissions_timeout_whitelist'))
 
         def to_dict(self) -> dict:
             return remove_none_values({
                 'guild': self.guild,
-                'log_channel': self.log_channel
+                'log_channel': self.log_channel,
+                'whitelist': self.whitelist,
+                'permissions_timeout': self.permissions_timeout,
+                'permissions_timeout_whitelist': self.permissions_timeout_whitelist
             })
 
     # For whatever reason, all of these are strings

@@ -10,7 +10,7 @@ import logging
 
 from utils.database import Database
 from utils.kidney_bot import KidneyBot
-from utils.checks import is_owner
+from utils.checks import is_bot_owner
 
 
 class UserProfile:
@@ -55,25 +55,27 @@ class Economy(commands.Cog):
         logging.info('Economy cog loaded.')
 
     @commands.command()
-    @is_owner()
+    @is_bot_owner()
     async def resetuser(self, ctx, user: discord.User):
         await self.bot.database.currency.delete_one({'userID': str(user.id)})
         await ctx.send('User removed successfully!')
 
     @commands.command()
-    @is_owner()
+    @is_bot_owner()
     async def addmoney(self, ctx, user: discord.User, amount: int):
         await self.bot.add_currency(user, amount, 'wallet')
 
     @app_commands.command(name="beg", description='Imagine being that beanless lol. 30 second cooldown.')
     @app_commands.checks.cooldown(1, 6, key=lambda i: i.user.id)
     async def beg(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         amount = random.randint(0, 100)
         await self.bot.add_currency(interaction.user, amount, 'wallet')
-        await interaction.response.send_message(f'You gained {amount} from begging!')
+        await interaction.followup.send(f'You gained {amount} from begging!')
 
     @app_commands.command(name="balance", description='View your bean count')
     async def balance(self, interaction: discord.Interaction, user: discord.User = None):
+        await interaction.response.defer()
         if not user:
             user = interaction.user
         profile = UserProfile(self.bot, self.bot.database, user)
@@ -82,10 +84,11 @@ class Economy(commands.Cog):
         embed = discord.Embed(title=f"{user.name}'s balance", color=0x00ff00)
         embed.add_field(name="Wallet", value=f"{await profile.wallet()} beans", inline=False)
         embed.add_field(name="Bank", value=f"{await profile.bank()} beans", inline=False)
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="deposit", description='Deposit beans')
     async def deposit(self, interaction: discord.Interaction, amount: str):
+        await interaction.response.defer()
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
         await profile.async_init()
         try:
@@ -96,18 +99,19 @@ class Economy(commands.Cog):
             elif amount.lower() == 'half':
                 amount = int(await profile.wallet()) // 2
             else:
-                await interaction.response.send_message('Value must be a number, "all", or "half"', ephemeral=True)
+                await interaction.followup.send('Value must be a number, "all", or "half"', ephemeral=True)
                 return
         if int(amount) <= int(await profile.wallet()):
             await profile.add_currency(-int(amount), 'wallet')
             await profile.add_currency(int(amount), 'bank')
-            await interaction.response.send_message(f'Deposited {int(amount)} beans')
+            await interaction.followup.send(f'Deposited {int(amount)} beans')
         else:
-            await interaction.response.send_message('You are trying to deposit more beans than you have!',
+            await interaction.followup.send('You are trying to deposit more beans than you have!',
                                                     ephemeral=True)
 
     @app_commands.command(name="withdraw", description="Withdraw beans")
     async def withdraw(self, interaction: discord.Interaction, amount: str):
+        await interaction.response.defer()
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
         await profile.async_init()
         try:
@@ -118,38 +122,41 @@ class Economy(commands.Cog):
             elif amount.lower() == 'half':
                 amount = int(await profile.bank()) // 2
             else:
-                await interaction.response.send_message('Value must be a number, "all", or "half"', ephemeral=True)
+                await interaction.followup.send('Value must be a number, "all", or "half"', ephemeral=True)
                 return
         if int(amount) <= int(await profile.bank()):
             await profile.add_currency(int(amount), 'wallet')
             await profile.add_currency(-int(amount), 'bank')
-            await interaction.response.send_message(f'Withdrew {amount} beans')
+            await interaction.followup.send(content=f'Withdrew {amount} beans')
         else:
-            await interaction.response.send_message('You are trying to withdraw more beans than you have!',
+            await interaction.followup.send('You are trying to withdraw more beans than you have!',
                                                     ephemeral=True)
 
     @app_commands.command(name='rob',
                           description='Rob someone of their beans and make them very mad. 30 second cooldown.')
     @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
     async def rob(self, interaction: discord.Interaction, user: discord.User):
+        await interaction.response.defer()
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
         await profile.async_init()
+
         target_profile = UserProfile(self.bot, self.bot.database, user)
         await target_profile.async_init()
+
         if int(await target_profile.wallet()) <= 11:
-            await interaction.response.send_message('They have no beans!', ephemeral=True)
+            await interaction.followup.send('They have no beans!', ephemeral=True)
         else:
             if int(await profile.wallet()) <= 50:
-                await interaction.response.send_message('You don\'t have enough money in your wallet!', ephemeral=True)
+                await interaction.followup.send('You don\'t have enough money in your wallet!', ephemeral=True)
                 return
             amount = random.randint(0, int(await profile.wallet() // 6))
             if amount < 2:
-                await interaction.response.send_message('You were caught! You pay 50 beans in fines.')
+                await interaction.followup.send('You were caught! You pay 50 beans in fines.')
                 await profile.add_currency(-50, 'wallet')
                 return
             await target_profile.add_currency(-amount, 'wallet')
             await profile.add_currency(amount, 'wallet')
-            await interaction.response.send_message(f"Stole {amount} beans from {user.mention}")
+            await interaction.followup.send(f"Stole {amount} beans from {user.mention}")
 
 
 async def setup(bot):

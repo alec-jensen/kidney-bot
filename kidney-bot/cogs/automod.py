@@ -11,7 +11,7 @@ from typing import Literal
 
 from utils.kidney_bot import KidneyBot
 from utils.audit_log_utils import AuditLogCheckTypes, attempt_undo_audit_log_action
-import utils.permission_checks as permission_checks
+from utils import checks
 
 moderation_permissions = [
     'administrator',
@@ -308,42 +308,44 @@ class Automod(commands.Cog):
                     await after.send(f'In the server {after.guild.name}, you were removed from role(s) {", ".join([role.name for role in roles])} due to permissions timeout.')
 
     auto_mod = app_commands.Group(name='automod', description='Manage Automod settings',
-                                  default_permissions=discord.Permissions(manage_guild=True))
+                                  default_permissions=discord.Permissions(manage_guild=True), guild_only=True)
 
     @auto_mod.command(name='ai', description='Manage AI automod settings. Recommended to set to 70-80% for best results.')
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def automod(self, interaction: discord.Interaction, enabled: bool = None, option: Literal['TOXICITY', 'SEVERE_TOXICITY', 'IDENTITY_ATTACK', 'INSULT', 'PROFANITY', 'THREAT', 'FLIRTATION', 'OBSCENE', 'SPAM'] = None, value: int = None):
+        await interaction.response.defer(ephemeral=True)
         if enabled is not None:
             doc = await self.bot.database.ai_detection.find_one({'guild': interaction.guild.id})
             if doc is None:
                 await self.bot.database.ai_detection.insert_one({'guild': interaction.guild.id, 'enabled': enabled})
                 if enabled is False:
-                    await interaction.response.send_message(f'AI Detection disabled.', ephemeral=True)
+                    await interaction.followup.send(f'AI Detection disabled.', ephemeral=True)
                 elif enabled is True:
-                    await interaction.response.send_message(f'AI Detection enabled.', ephemeral=True)
+                    await interaction.followup.send(f'AI Detection enabled.', ephemeral=True)
 
                 return
             else:
                 if enabled is False:
                     await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {'enabled': False}})
-                    await interaction.response.send_message(f'AI Detection disabled.', ephemeral=True)
+                    await interaction.followup.send(f'AI Detection disabled.', ephemeral=True)
                     return
                 elif enabled is True:
                     await self.bot.database.ai_detection.update_one({'guild': interaction.guild.id}, {'$set': {'enabled': True}})
-                    await interaction.response.send_message(f'AI Detection enabled.', ephemeral=True)
+                    await interaction.followup.send(f'AI Detection enabled.', ephemeral=True)
                     return
 
         if option is not None and value is None:
-            await interaction.response.send_message(f'Invalid arguments. Please provide a value.', ephemeral=True)
+            await interaction.followup.send(f'Invalid arguments. Please provide a value.', ephemeral=True)
             return
         if option is not None and value is not None and value < 0 or value > 100:
-            await interaction.response.send_message(f'Invalid value. Value must be between 0 and 100.', ephemeral=True)
+            await interaction.followup.send(f'Invalid value. Value must be between 0 and 100.', ephemeral=True)
             return
         if enabled is None and (option is None or value is None):
-            await interaction.response.send_message(f'Invalid arguments. Please provide an option and value.', ephemeral=True)
+            await interaction.followup.send(f'Invalid arguments. Please provide an option and value.', ephemeral=True)
             return
         if option is None and enabled is None and value is None:
-            await interaction.response.send_message(f'Invalid arguments. Please provide an enabled state, or an option and value.', ephemeral=True)
+            await interaction.followup.send(f'Invalid arguments. Please provide an enabled state, or an option and value.', ephemeral=True)
             return
 
         if await self.bot.database.ai_detection.find_one({'guild': interaction.guild.id}) is not None:
@@ -351,14 +353,16 @@ class Automod(commands.Cog):
         else:
             await self.bot.database.ai_detection.insert_one({'guild': interaction.guild.id, option: value})
 
-        await interaction.response.send_message(f'`{option}` set to `{value}`', ephemeral=True)
+        await interaction.followup.send(f'`{option}` set to `{value}`', ephemeral=True)
 
     @auto_mod.command(name='ai_overview', description='View AI automod settings')
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def automod_overview(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         doc = await self.bot.database.ai_detection.find_one({'guild': interaction.guild.id})
         if doc is None:
-            await interaction.response.send_message(f'AI Detection is disabled.', ephemeral=True)
+            await interaction.followup.send(f'AI Detection is disabled.', ephemeral=True)
             return
         embed = discord.Embed(title='AI Detection Overview',
                               description='AI Detection is currently enabled. The following settings are set:', color=discord.Color.green())
@@ -366,35 +370,41 @@ class Automod(commands.Cog):
             if key == '_id' or key == 'guild':
                 continue
             embed.add_field(name=key, value=value, inline=True)
-        await interaction.response.send_message(embeds=[embed], ephemeral=True)
+        await interaction.followup.send(embeds=[embed], ephemeral=True)
 
     @auto_mod.command(name='log', description='Set the log channel for automod')
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def automod_log(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        await interaction.response.defer(ephemeral=True)
         if await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id}) is not None:
             await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'log_channel': channel.id}})
         else:
             await self.bot.database.automodsettings.insert_one({'guild': interaction.guild.id, 'log_channel': channel.id})
 
-        await interaction.response.send_message(f'Log channel set to {channel.mention}', ephemeral=True)
+        await interaction.followup.send(f'Log channel set to {channel.mention}', ephemeral=True)
 
     @auto_mod.command(name='permissions_timeout', description='Set how long users must be in the server to gain moderation permissions')
     @app_commands.describe(timeout='How long users must be in the server to gain moderation permissions, in seconds')
     @app_commands.default_permissions(manage_guild=True)
-    @permission_checks.is_guild_owner()
+    @app_commands.guild_only()
+    @checks.is_guild_owner()
     async def automod_permissions_timeout(self, interaction: discord.Interaction, timeout: int):
+        await interaction.response.defer(ephemeral=True)
         if await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id}) is not None:
             await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout': timeout}})
         else:
             await self.bot.database.automodsettings.insert_one({'guild': interaction.guild.id, 'permissions_timeout': timeout})
 
-        await interaction.response.send_message(f'Permissions timeout set to {timeout} seconds.', ephemeral=True)
+        await interaction.followup.send(f'Permissions timeout set to {timeout} seconds.', ephemeral=True)
 
     @auto_mod.command(name='permissions_timeout_whitelist', description='Whitelist a user from the permissions timeout')
     @app_commands.describe(user='The user to whitelist', state='Whether to whitelist or unwhitelist the user')
     @app_commands.default_permissions(administrator=True)
-    @permission_checks.is_guild_owner()
+    @app_commands.guild_only()
+    @checks.is_guild_owner()
     async def permissions_timeout_whitelist(self, interaction: discord.Interaction, user: discord.Member, state: bool = True):
+        await interaction.response.defer(ephemeral=True)
         doc = await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id})
         if doc is None:
             await self.bot.database.automodsettings.insert_one({'guild': interaction.guild.id, 'permissions_timeout_whitelist': []})
@@ -402,29 +412,32 @@ class Automod(commands.Cog):
 
         if state is True:
             if user.id in doc.get('permissions_timeout_whitelist', []):
-                await interaction.response.send_message(f'{user.mention} is already whitelisted.', ephemeral=True)
+                await interaction.followup.send(f'{user.mention} is already whitelisted.', ephemeral=True)
                 return
             doc['permissions_timeout_whitelist'] = doc.get(
                 'permissions_timeout_whitelist', [])
             doc['permissions_timeout_whitelist'].append(user.id)
             await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout_whitelist': doc['permissions_timeout_whitelist']}})
-            await interaction.response.send_message(f'{user.mention} whitelisted.', ephemeral=True)
+            await interaction.followup.send(f'{user.mention} whitelisted.', ephemeral=True)
         elif state is False:
             if user.id not in doc.get('permissions_timeout_whitelist', []):
-                await interaction.response.send_message(f'{user.mention} is not whitelisted.', ephemeral=True)
+                await interaction.followup.send(f'{user.mention} is not whitelisted.', ephemeral=True)
                 return
             doc['permissions_timeout_whitelist'].remove(user.id)
             await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout_whitelist': doc['permissions_timeout_whitelist']}})
-            await interaction.response.send_message(f'{user.mention} unwhitelisted.', ephemeral=True)
+            await interaction.followup.send(f'{user.mention} unwhitelisted.', ephemeral=True)
 
     @auto_mod.command(name="whitelist", description="Whitelist a user or channel from automod")
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
+    @checks.is_guild_owner()
     async def whitelist(self, interaction: discord.Interaction, state: bool = True, user: discord.User = None, channel: discord.TextChannel = None):
+        await interaction.response.defer(ephemeral=True)
         if user is None and channel is None:
-            await interaction.response.send_message(f'Invalid arguments. Please provide a user or channel.', ephemeral=True)
+            await interaction.followup.send(f'Invalid arguments. Please provide a user or channel.', ephemeral=True)
             return
         if user is not None and channel is not None:
-            await interaction.response.send_message(f'Invalid arguments. Please provide a user or channel, not both.', ephemeral=True)
+            await interaction.followup.send(f'Invalid arguments. Please provide a user or channel, not both.', ephemeral=True)
             return
 
         user_or_channel = user if user is not None else channel
@@ -433,22 +446,27 @@ class Automod(commands.Cog):
             await self.bot.database.automodsettings.insert_one({'guild': interaction.guild.id, 'whitelist': []})
             doc = await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id})
 
-        if state is True:
+        if state:
             if user_or_channel.id in doc.get('whitelist', []):
-                await interaction.response.send_message(f'{user_or_channel.mention} is already whitelisted.', ephemeral=True)
+                await interaction.followup.send(f'{user_or_channel.mention} is already whitelisted.', ephemeral=True)
                 return
+            
             doc['whitelist'] = [] if doc.get(
                 'whitelist') is None else doc.get('whitelist')
             doc['whitelist'].append(user_or_channel.id)
-            await interaction.response.send_message(f'{user_or_channel.mention} whitelisted.', ephemeral=True)
         else:
             if user_or_channel.id not in doc.get('whitelist', []):
-                await interaction.response.send_message(f'{user_or_channel.mention} is not whitelisted.', ephemeral=True)
+                await interaction.followup.send(f'{user_or_channel.mention} is not whitelisted.', ephemeral=True)
                 return
+            
             doc['whitelist'].remove(user_or_channel.id)
-            await interaction.response.send_message(f'{user_or_channel.mention} unwhitelisted.', ephemeral=True)
 
         await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'whitelist': doc['whitelist']}})
+
+        if state is True:
+            await interaction.followup.send(f'{user_or_channel.mention} whitelisted.', ephemeral=True)
+        else:
+            await interaction.followup.send(f'{user_or_channel.mention} unwhitelisted.', ephemeral=True)
 
 
 async def setup(bot: KidneyBot):

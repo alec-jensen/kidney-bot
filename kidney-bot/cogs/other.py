@@ -7,6 +7,7 @@ from discord.ext import commands
 from discord import app_commands
 import psutil
 import logging
+from humanfriendly import format_timespan
 
 from utils.kidney_bot import KidneyBot
 from utils.database import Schemas
@@ -65,7 +66,29 @@ class Other(commands.Cog):
 
         doc: Schemas.AutoModSettings = await self.bot.database.automodsettings.find_one(Schemas.AutoModSettings(guild=interaction.guild.id), Schemas.AutoModSettings)
         if doc is not None:
-            embed.add_field(name='Auto Mod', value=f'Log Channel: {interaction.guild.get_channel(doc.log_channel).mention}')
+            whitelist = []
+            for user_or_channel in doc.whitelist:
+                if interaction.guild.get_member(user_or_channel) is not None:
+                    whitelist.append(interaction.guild.get_member(user_or_channel).mention)
+                elif interaction.guild.get_channel(user_or_channel) is not None:
+                    whitelist.append(interaction.guild.get_channel(user_or_channel).mention)
+                else:
+                    whitelist.append(user_or_channel)
+
+            permissions_timeout_whitelist = []
+            for user in doc.permissions_timeout_whitelist:
+                if interaction.guild.get_member(user) is not None:
+                    permissions_timeout_whitelist.append(interaction.guild.get_member(user).mention)
+                else:
+                    permissions_timeout_whitelist.append(user)
+
+            permissions_timeout = None
+            if doc.permissions_timeout is not None:
+                permissions_timeout = format_timespan(doc.permissions_timeout)
+
+            embed.add_field(name='Auto Mod', value=f'Log Channel: {interaction.guild.get_channel(doc.log_channel).mention}\
+                            \nWhitelist: {", ".join(whitelist)}\nPermissions Timeout: {permissions_timeout}\
+                            \nPermissions Timeout Whitelist: {", ".join(permissions_timeout_whitelist)}')
 
         doc: Schemas.AutoRoleSettings = await self.bot.database.autorole_settings.find_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), Schemas.AutoRoleSettings)
         if doc is not None:

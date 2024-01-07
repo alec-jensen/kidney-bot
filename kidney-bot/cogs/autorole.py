@@ -1,3 +1,4 @@
+from code import interact
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -22,7 +23,7 @@ class Autorole(commands.Cog):
     @tasks.loop(seconds=60)
     async def autorole_loop(self):
         for guild in self.bot.guilds:
-            doc: dict = await self.bot.database.autorole_settings.find_one({'guild': guild.id})
+            doc: dict = await self.bot.database.autorole_settings.find_one({'guild': guild.id}) # type: ignore
             if doc is None:
                 continue
             for role in doc.get('roles', []):
@@ -43,7 +44,7 @@ class Autorole(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        doc: dict = await self.bot.database.autorole_settings.find_one({'guild': member.guild.id})
+        doc: dict = await self.bot.database.autorole_settings.find_one({'guild': member.guild.id}) # type: ignore
         if doc is None:
             return
 
@@ -76,9 +77,11 @@ class Autorole(commands.Cog):
     @autorole.command(name='add', description='Add a role to the autorole list.')
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(role='The role to add to the autorole list.', delay='The delay in seconds before the role is given to the user.')
+    @app_commands.guild_only()
     async def add(self, interaction: discord.Interaction, role: discord.Role, delay: int = 0):
+        await interaction.response.defer(ephemeral=True)
         if role.position >= interaction.guild.me.top_role.position:
-            await interaction.response.send_message(f'Cannot add {role.mention} to the autorole list, it is higher than my top role.', ephemeral=True)
+            await interaction.followup.send(f'Cannot add {role.mention} to the autorole list, it is higher than my top role.', ephemeral=True)
             return
         
         def _role_is_moderator(role: discord.Role) -> bool:
@@ -87,9 +90,9 @@ class Autorole(commands.Cog):
                     role.permissions.kick_members or role.permissions.manage_nicknames or role.permissions.manage_webhooks
         
         if _role_is_moderator(role):
-            view = Confirm()
+            view = Confirm(accept_response=f'Added {role.mention} to the autorole list.', deny_response='Cancelled', ephemeral=True)
 
-            await interaction.response.send_message(
+            await interaction.followup.send(
                 f'It appears the role {role.mention} has moderation permissions.\n**If you add this role, EVERY MEMBER OF THIS SERVER WILL RECIEVE IT**',
                 ephemeral=True, view=view)
             
@@ -103,7 +106,7 @@ class Autorole(commands.Cog):
         else:
             for role_dict in doc['roles']:
                 if role_dict['id'] == role.id:
-                    await interaction.response.send_message(f'{role} is already in the autorole list.', ephemeral=True)
+                    await interaction.followup.send(f'{role} is already in the autorole list.', ephemeral=True)
                     return
                 
             doc['roles'].append({'id': role.id, 'delay': delay})
@@ -119,28 +122,31 @@ class Autorole(commands.Cog):
 
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
 
-        if _role_is_moderator(role):
-            await interaction.edit_original_response(content=f'Added {role} to the autorole list.', view=None)
-        else:
-            await interaction.response.send_message(f'Added {role} to the autorole list.', ephemeral=True)
+        if not _role_is_moderator(role):
+            await interaction.followup.send(f'Added {role.mention} to the autorole list.', ephemeral=True)
 
     @autorole.command(name='remove', description='Remove a role from the autorole list.')
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(role='The role to remove from the autorole list.')
+    @app_commands.guild_only()
     async def remove(self, interaction: discord.Interaction, role: discord.Role):
-        doc = await self.bot.database.autorole_settings.find_one({'guild': interaction.guild.id})
+        await interaction.response.defer(ephemeral=True)
+        doc: dict = await self.bot.database.autorole_settings.find_one({'guild': interaction.guild.id}) # type: ignore
         if doc is None:
-            await interaction.response.send_message(f'No roles are set for autorole.', ephemeral=True)
+            await interaction.followup.send(f'No roles are set for autorole.', ephemeral=True)
             return
         doc['roles'] = [role_dict for role_dict in doc['roles']
                         if role_dict['id'] != role.id]
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
-        await interaction.response.send_message(f'Removed {role} from the autorole list.', ephemeral=True)
+        await interaction.followup.send(f'Removed {role} from the autorole list.', ephemeral=True)
+
+        # Remove invalid roles from the database
 
         if doc is None:
             return
 
-        for role in doc.get('roles', []):
+        role: dict[str, int]
+        for role in doc.get('roles', {}):
             discord_role = interaction.guild.get_role(role['id'])
             if discord_role is None:
                 doc['roles'].remove(role)
@@ -151,17 +157,21 @@ class Autorole(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.describe(role='The role to set the delay for.', delay='The delay in seconds before the role is given to the user.')
     @app_commands.describe(delay='The delay in seconds before the role is given to the user.')
+    @app_commands.guild_only()
     async def delay(self, interaction: discord.Interaction, role: discord.Role, delay: int):
+        await interaction.response.defer(ephemeral=True)
         doc = await self.bot.database.autorole_settings.find_one({'guild': interaction.guild.id})
         if doc is None:
-            await interaction.response.send_message(f'No roles are set for autorole.', ephemeral=True)
+            await interaction.followup.send(f'No roles are set for autorole.', ephemeral=True)
             return
         for role_dict in doc['roles']:
             if role_dict['id'] == role.id:
                 role_dict['delay'] = delay
                 break
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': {'roles': doc['roles']}})
-        await interaction.response.send_message(f'Set the delay for {role} to {delay} seconds.', ephemeral=True)
+        await interaction.followup.send(f'Set the delay for {role} to {delay} seconds.', ephemeral=True)
+
+        # Remove invalid roles from the database
 
         if doc is None:
             return
@@ -175,10 +185,12 @@ class Autorole(commands.Cog):
 
     @autorole.command(name='list', description='List all roles in the autorole list.')
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def list(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True)
         doc = await self.bot.database.autorole_settings.find_one({'guild': interaction.guild.id})
         if doc is None:
-            await interaction.response.send_message(f'No roles are set for autorole.', ephemeral=True)
+            await interaction.followup.send(f'No roles are set for autorole.', ephemeral=True)
             return
 
         role_names: list[str] = []
@@ -189,7 +201,9 @@ class Autorole(commands.Cog):
             role_names.append(
                 f'{role.mention}' + (f' (delay: {role_dict["delay"]} seconds)' if role_dict['delay'] > 0 else ''))
 
-        await interaction.response.send_message('\n'.join(role_names), ephemeral=True)
+        await interaction.followup.send('\n'.join(role_names), ephemeral=True)
+
+        # Remove invalid roles from the database
 
         if doc is None:
             return
@@ -203,15 +217,19 @@ class Autorole(commands.Cog):
 
     @autorole.command(name='settings', description='Set miscellaneous settings for autorole.')
     @app_commands.default_permissions(manage_guild=True)
+    @app_commands.guild_only()
     async def settings(self, interaction: discord.Interaction, option: Literal["BotsGetRoles"], value: bool):
+        await interaction.response.defer(ephemeral=True)
         doc = await self.bot.database.autorole_settings.find_one({'guild': interaction.guild.id})
         if doc is None:
-            await interaction.response.send_message(f'No roles are set for autorole.', ephemeral=True)
+            await interaction.followup.send(f'No roles are set for autorole.', ephemeral=True)
             return
         
         doc[option] = value
         await self.bot.database.autorole_settings.update_one({'guild': interaction.guild.id}, {'$set': doc})
-        await interaction.response.send_message(f'Set {option} to {value}.', ephemeral=True)
+        await interaction.followup.send(f'Set {option} to {value}.', ephemeral=True)
+
+        # Remove invalid roles from the database
 
         if doc is None:
             return
