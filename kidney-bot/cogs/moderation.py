@@ -140,10 +140,11 @@ class Moderation(commands.Cog):
             return
         # eventually, we will detect mutes from tempmutes
         await user.edit(timed_out_until=None)
-        # await ctx.channel.send(f'{member.mention} was untempmuted.', delete_after=10)
 
         role = discord.utils.get(interaction.guild.roles, name="Muted")
-        await user.remove_roles(role)
+        if role is not None and role in user.roles:
+            await user.remove_roles(role)
+
         embed = discord.Embed(title=f"Unmute result",
                               description=None, color=discord.Color.green())
         embed.add_field(name="Unmuted", value=user.mention, inline=False)
