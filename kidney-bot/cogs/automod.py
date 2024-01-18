@@ -118,7 +118,7 @@ class Automod(commands.Cog):
 
         if len(detections) > 0:
             await message.delete()
-            await message.author.send(f'Your message in {message.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
+            await message.author.send(f'Your message```{message.content}```in {message.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
             await self.bot.log(message.guild, 'Automod', 'AI Detection (message send)', f'Message from {message.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{message.content}', user=message.guild.me, target=message.author)
 
     @commands.Cog.listener()
@@ -149,7 +149,7 @@ class Automod(commands.Cog):
 
         if len(detections) > 0:
             await after.delete()
-            await after.author.send(f'Your message in {after.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
+            await after.author.send(f'Your message```{after.content}```in {after.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
             await self.bot.log(after.guild, 'Automod', 'AI Detection (message edit)', f'Message from {after.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{after.content}', user=after.guild.me, target=after.author)
 
     @commands.Cog.listener()
@@ -189,7 +189,7 @@ class Automod(commands.Cog):
 
         if len(detections) > 0:
             await after.edit(nick=before.nick)
-            await after.send(f'Your nickname was reset due to AI detections:\n{detections_str}')
+            await after.send(f'Your nickname in {after.guild.name} was reset due to the following AI detections:\n{detections_str}\nNickname:\n{after.nick}')
             await self.bot.log(after.guild, 'Automod', 'AI Detection (nickname update)', f'Nickname of {after} was reset due to the following AI detections:\n{detections_str}\nNickname:\n{after.nick}', user=after.guild.me, target=after)
 
     @commands.Cog.listener()
