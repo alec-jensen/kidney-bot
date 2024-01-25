@@ -57,3 +57,4 @@ yarl~=1.9.4
 youtube-dl @ git+https://github.com/ytdl-org/youtube-dl.git@be008e657d79832642e2158557c899249c9e31cd
 regex~=2023.12.25
 humanfriendly~=10.0
+pyyaml~=6.0.1

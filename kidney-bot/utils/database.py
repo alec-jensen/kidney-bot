@@ -3,9 +3,8 @@
 # Full license at LICENSE.md
 
 import logging
-from typing import Any
+from typing import Any, Type
 import motor.motor_asyncio
-import asyncio
 
 
 def convert_except_none(value, type):
@@ -54,7 +53,7 @@ class Schemas:
             return getattr(self, key)
 
     class ActiveGuardSettings(BaseSchema):
-        def __init__(self, guild_id: int = None, block_known_spammers: bool = None) -> None:
+        def __init__(self, guild_id: int | None = None, block_known_spammers: bool | None = None) -> None:
             self.guild_id: int | None = convert_except_none(guild_id, int)
             self.block_known_spammers: bool | None = convert_except_none(
                 block_known_spammers, bool)
@@ -73,7 +72,12 @@ class Schemas:
             })
 
     class AiDetection(BaseSchema):
-        def __init__(self, guild: int = None, enabled: bool = None, TOXICITY: int = None, SEVERE_TOXICITY: int = None, IDENTITY_ATTACK: int = None, INSULT: int = None, PROFANITY: int = None, THREAT: int = None, FLIRTATION: int = None, OBSCENE: int = None, SPAM: int = None) -> None:
+        def __init__(self, guild: int | None = None, enabled: bool | None = None,
+                     TOXICITY: int | None = None, SEVERE_TOXICITY: int | None = None,
+                     IDENTITY_ATTACK: int | None = None, INSULT: int | None = None,
+                     PROFANITY: int | None = None, THREAT: int | None = None,
+                     FLIRTATION: int | None = None, OBSCENE: int | None = None,
+                     SPAM: int | None = None) -> None:
             self.guild_id: int | None = convert_except_none(guild, int)
             self.enabled: bool | None = convert_except_none(enabled, bool)
             self.TOXICITY: int | None = convert_except_none(TOXICITY, int)
@@ -116,7 +120,8 @@ class Schemas:
             })
 
     class AutoModSettings(BaseSchema):
-        def __init__(self, guild: int = None, log_channel: int = None, whitelist: list[int] = None, permissions_timeout: int = None, permissions_timeout_whitelist: list[int] = None) -> None:
+        def __init__(self, guild: int | None = None, log_channel: int | None = None, whitelist: list[int] | None = None,
+                     permissions_timeout: int | None = None, permissions_timeout_whitelist: list[int] | None = None) -> None:
             self.guild: int | None = convert_except_none(guild, int)
             self.log_channel: int | None = convert_except_none(
                 log_channel, int)
@@ -146,7 +151,8 @@ class Schemas:
 
     # For whatever reason, all of these are strings
     class Currency(BaseSchema):
-        def __init__(self, userID: str = None, wallet: str = None, bank: str = None, inventory: list = None) -> None:
+        def __init__(self, userID: str | None = None, wallet: str | None = None,
+                     bank: str | None = None, inventory: list | None = None) -> None:
             self.userID: str | None = convert_except_none(userID, str)
             self.wallet: str | None = convert_except_none(wallet, str)
             self.bank: str | None = convert_except_none(bank, str)
@@ -168,7 +174,10 @@ class Schemas:
             })
 
     class Reports(BaseSchema):
-        def __init__(self, report_id: str = None, reporter: int = None, time_reported: float = None, reported_user: int = None, reported_user_name: str = None, reason: str = None, attached_message: str = None, attached_message_attachments: list = None, report_status: str = None, handled_by: int = None) -> None:
+        def __init__(self, report_id: str | None = None, reporter: int | None = None, time_reported: float | None = None,
+                     reported_user: int | None = None, reported_user_name: str | None = None, reason: str | None = None,
+                     attached_message: str | None = None, attached_message_attachments: list | None = None,
+                     report_status: str | None = None, handled_by: int | None = None) -> None:
             self.report_id: str | None = convert_except_none(report_id, str)
             self.reporter: int | None = convert_except_none(reporter, int)
             self.time_reported: float | None = convert_except_none(
@@ -207,7 +216,7 @@ class Schemas:
             })
 
     class ScammerList(BaseSchema):
-        def __init__(self, user: int = None, time: int = None, reason: str = None) -> None:
+        def __init__(self, user: int | None = None, time: int | None = None, reason: str | None = None) -> None:
             self.user: int | None = convert_except_none(user, int)
             self.time: int | None = convert_except_none(time, int)
             self.reason: str | None = convert_except_none(reason, str)
@@ -227,7 +236,7 @@ class Schemas:
             })
 
     class ServerBans(BaseSchema):
-        def __init__(self, id: int = None, name: int = None, owner: int = None, reason: str = None) -> None:
+        def __init__(self, id: int | None = None, name: int | None = None, owner: int | None = None, reason: str | None = None) -> None:
             self.id: int | None = convert_except_none(id, int)
             self.name: int | None = convert_except_none(name, int)
             self.owner: int | None = convert_except_none(owner, int)
@@ -249,7 +258,7 @@ class Schemas:
             })
 
     class RoleSchema(BaseSchema):
-        def __init__(self, id: int = None, delay: int = None) -> None:
+        def __init__(self, id: int | None = None, delay: int | None = None) -> None:
             self.id: int | None = convert_except_none(id, int)
             self.delay: int | None = convert_except_none(delay, int)
 
@@ -267,7 +276,7 @@ class Schemas:
             })
 
     class AutoRoleSettings(BaseSchema):
-        def __init__(self, guild: int = None, roles: list['Schemas.RoleSchema'] = None, bots_get_roles: bool = None) -> None:
+        def __init__(self, guild: int | None = None, roles: list['Schemas.RoleSchema'] | None = None, bots_get_roles: bool | None = None) -> None:
             self.guild: int | None = convert_except_none(guild, int)
             self.roles: list['Schemas.RoleSchema'] | None = roles
             self.bots_get_roles: bool | None = convert_except_none(
@@ -288,7 +297,7 @@ class Schemas:
             })
 
     class ExceptionSchema(BaseSchema):
-        def __init__(self, user_id: int = None, always_report_errors: bool = None) -> None:
+        def __init__(self, user_id: int | None = None, always_report_errors: bool | None = None) -> None:
             self.user_id: int | None = convert_except_none(user_id, int)
             self.always_report_errors: bool | None = convert_except_none(
                 always_report_errors, bool)
@@ -305,17 +314,35 @@ class Schemas:
                 'user_id': self.user_id,
                 'always_report_errors': self.always_report_errors
             })
+        
+    class UserConfig(BaseSchema):
+        def __init__(self, user_id: int | None = None, announce_level: int | None = None) -> None:
+            self.user_id: int | None = convert_except_none(user_id, int)
+            self.announce_level: int | None = convert_except_none(announce_level, int)
+
+        @classmethod
+        def from_dict(cls, data: dict) -> 'Schemas.UserConfig':
+            if data is None:
+                return cls()
+
+            return cls(data.get('user_id'), data.get('announce_level'))
+        
+        def to_dict(self) -> dict:
+            return remove_none_values({
+                'user_id': self.user_id,
+                'announce_level': self.announce_level
+            })
 
 
 class Collection:
     """Wrapper for motor.motor_asyncio.AsyncIOMotorCollection. If a schema is provided, all queries will be converted to the schema."""
 
-    def __init__(self, collection: motor.motor_asyncio.AsyncIOMotorCollection, schema: Schemas.BaseSchema = None) -> None:
+    def __init__(self, collection: motor.motor_asyncio.AsyncIOMotorCollection, schema: Type[Schemas.BaseSchema] | None = None) -> None:
         self.collection: motor.motor_asyncio.AsyncIOMotorCollection = collection
-        self.schema: Schemas.BaseSchema = schema
+        self.schema: Type[Schemas.BaseSchema] | None = schema
 
     """Find one document in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Schemas.BaseSchema = None) -> dict | Schemas.BaseSchema | None:
+    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> dict | Schemas.BaseSchema | None:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
@@ -329,19 +356,25 @@ class Collection:
         return document if schema is None else schema.from_dict(document)
 
     """Find all documents in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find(self, query: Schemas.BaseSchema | dict, schema: Schemas.BaseSchema | dict = None) -> list[dict] | list[Schemas.BaseSchema]:
+    async def find(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> motor.motor_asyncio.AsyncIOMotorCursor | list[Schemas.BaseSchema]:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
-        documents = await self.collection.find(query)
-        if self.schema is None:
+        documents: motor.MotorCursor = await self.collection.find(query) # type: ignore
+        if schema is None:
+            schema = self.schema
+
+        if schema is None:
             return documents
 
-        return [self.schema.from_dict(document) for document in documents]
+        return [self.schema.from_dict(document) for document in documents] # type: ignore
 
     """Update one document in the collection."""
-    async def update_one(self, query: dict, update: dict) -> None:
-        await self.collection.update_one(query, update)
+    async def update_one(self, query: dict | Schemas.BaseSchema, update: dict, upsert: bool = False) -> None:
+        if isinstance(query, dict):
+            await self.collection.update_one(query, update, upsert=upsert)
+        else:
+            await self.collection.update_one(query.to_dict(), update, upsert=upsert)
 
     """Delete one document in the collection."""
     async def delete_one(self, query: dict | Schemas.BaseSchema) -> None:
@@ -409,7 +442,7 @@ class Database:
     @property
     def exceptions(self) -> Collection:
         return Collection(self.database.exceptions)
-
+    
     @property
-    def invite_tracking(self) -> Collection:
-        return Collection(self.database.invite_tracking, Schemas.InviteTracking)
+    def user_config(self) -> Collection:
+        return Collection(self.database.user_config, Schemas.UserConfig)

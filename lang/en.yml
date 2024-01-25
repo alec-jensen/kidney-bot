@@ -1,0 +1,24 @@
+# kidney bot is slowly transitioning to storing all strings in lang files like this one
+# this is to make it easier to translate the bot into other languages
+
+# NOTE: This file is not complete. It is a work in progress. This file will be updated as more strings are added.
+
+main:
+  createinvite:
+    reason: "Bot developer requested invite link"
+    couldnt_create_invite: "Couldn't create invite link. Please check console for errors."
+  
+  couldnt_reload_config: "Couldn't reload config. Please check console for errors."
+  reloaded_config: "Config reloaded."
+
+  # %cog% is the name of the cog
+  loaded_cog: "Loaded cog %cog%."
+  couldnt_load_cog: "Couldn't load cog %cog%. Please check console for errors."
+  unloaded_cog: "Unloaded cog %cog%."
+  couldnt_unload_cog: "Couldn't unload cog %cog%. Please check console for errors."
+  
+  reloaded_cog: "Reloaded cog %cog%."
+
+other:
+  announce:
+    invalid_level: "Invalid announce level. Please use one of the following: 0, 1, 2, 3, None, Critical, Updates, or All"

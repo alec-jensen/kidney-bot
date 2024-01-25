@@ -85,6 +85,23 @@ class KidneyBot(commands.Bot):
                               color=color)
         embed.set_footer(text=f'Automated logging by kidney bot')
         return await self.get_channel(doc['log_channel']).send(embed=embed)
+    
+    def get_lang_string(self, path: list[str] | str, default: str | None = None) -> str:
+        """Get a string from the language file."""
+
+        if type(path) == str:
+            path = path.split('.')
+
+        key = self.config.lang
+        for arg in path:
+            key = key.get(arg)
+            if key is None:
+                if default is None:
+                    raise KeyError(f'Language file is missing key {arg}')
+                
+                return default
+            
+        return key
 
 
 class _OptimisticUser:

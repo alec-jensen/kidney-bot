@@ -2,6 +2,7 @@
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
+import aiohttp
 import discord
 from discord.ext import commands
 import random
@@ -10,6 +11,7 @@ import os
 import logging
 import datetime
 import time
+from numpy import isin
 import regex as re
 
 from _version import __version__
@@ -44,7 +46,7 @@ bot: KidneyBot = KidneyBot(
     intents=discord.Intents.all()
 )
 
-statuses: list[discord.Game] = [discord.Game("with the fate of the world"), discord.Game("minecraft"), discord.Game("with <users> users"),
+statuses: list[discord.Game | discord.Streaming] = [discord.Game("with the fate of the world"), discord.Game("minecraft"), discord.Game("with <users> users"),
                                 discord.Streaming(
                                     name="<servers> servers", url="https://kidneybot.alecj.tk"), discord.Game("/rockpaperscissors"),
                                 discord.Game("counting to infinity... twice"), discord.Game("attempting to break the sound barrier... of silence")]
@@ -53,7 +55,7 @@ statuses: list[discord.Game] = [discord.Game("with the fate of the world"), disc
 async def status():
     await bot.wait_until_ready()
     while not bot.is_closed():
-        current_status: discord.Game = random.choice(statuses)
+        current_status: discord.Game = random.choice(statuses) # type: ignore
         current_status.name = current_status.name.replace("<users>", str(len(bot.users)))\
             .replace("<servers>", str(len(bot.guilds)))
         await bot.change_presence(activity=current_status)
@@ -63,14 +65,27 @@ async def status():
 
 async def user_count():
     await bot.wait_until_ready()
-    channel = bot.get_channel(bot.config.user_count_channel_id)
+    channel = bot.get_channel(bot.config.user_count_channel_id) # type: ignore
     if channel is None:
         logging.warning("User count channel not found, not counting users.")
         return
     
     while not bot.is_closed():
+        assert not isinstance(channel, discord.abc.PrivateChannel)
         await channel.edit(name=f"Total Users: {len(bot.users)}")
         await asyncio.sleep(360)
+
+
+async def heartbeat():
+    await bot.wait_until_ready()
+    while not bot.is_closed():
+        if bot.config.heartbeat_url is not None:
+            async with aiohttp.ClientSession() as session:
+                async with session.post(bot.config.heartbeat_url) as resp:
+                    if resp.status != 200:
+                        logging.warning(f"Heartbeat failed with status {resp.status}")
+
+        await asyncio.sleep(30)
 
 
 @bot.listen('on_ready')
@@ -85,12 +100,12 @@ async def on_guild_join(guild: discord.Guild):
     doc = await bot.database.serverbans.find_one({"id": guild.id})
     if doc is not None:
         embed = discord.Embed(title=f"{guild} is banned.",
-                              description=f"Your server *{guild}* is banned from using **{bot.user.name}**.",
+                              description=f"Your server *{guild}* is banned from using **{getattr(bot, 'user', 'Kidney Bot')}**.",
                               color=discord.Color.red())
         embed.add_field(name=f"You can appeal by contacting __**{bot.get_user(bot.config.owner_id).mention}**__.",
                         value="\u2800")
         embed.add_field(name="Reason", value=f"```{doc['reason']}```")
-        embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
+        embed.set_footer(text=bot.user, icon_url=bot.user.avatar.url)
         await guild.owner.send(embed=embed)
         await guild.leave()
 
@@ -109,10 +124,10 @@ async def load(ctx, extension: str):
     try:
         os.rename(f'cogs/-{extension}.py', f'cogs/{extension}.py')
         await bot.load_extension(f'cogs.{extension}')
-        await ctx.reply(f'Loaded cog {extension}')
+        await ctx.reply(bot.get_lang_string("main.loaded_cog").replace("%cog%", extension))
         logging.info(f'{extension.capitalize()} cog loaded.')
     except Exception as e:
-        await ctx.reply(f'Could not load cog {extension}\n`{e}`')
+        await ctx.reply(bot.get_lang_string("main.couldnt_load_cog").replace("%cog%", extension))
 
 
 @bot.command()
@@ -122,10 +137,10 @@ async def unload(ctx, extension: str):
     try:
         await bot.unload_extension(f'cogs.{extension}')
         os.rename(f'cogs/{extension}.py', f'cogs/-{extension}.py')
-        await ctx.reply(f'Unlodaded cog {extension}')
+        await ctx.reply(bot.get_lang_string("main.unloaded_cog").replace("%cog%", extension))
         logging.info(f'{extension.capitalize()} cog unloaded.')
     except Exception as e:
-        await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
+        await ctx.reply(bot.get_lang_string("main.couldnt_unload_cog").replace("%cog%", extension))
 
 
 @bot.command()
@@ -144,7 +159,7 @@ async def reload(ctx, extension: str):
         await ctx.reply(f'Could not load cog {extension}\n`{e}`')
         return
 
-    await ctx.reply(f'Reloaded cog {extension}')
+    await ctx.reply(bot.get_lang_string("main.reloaded_cog").replace("%cog%", extension))
     logging.info(f'Reloaded cog {extension}')
 
 
@@ -161,41 +176,26 @@ async def say(ctx, *, text: str):
 
 @bot.command()
 @is_bot_owner()
-async def reply(ctx, message: str, *, text: str):
+async def reply(ctx: commands.Context, message: str, *, text: str):
     """Make the bot reply to a message."""
     try:
         await ctx.message.delete()
     except:
         pass
     channel = ctx.channel
-    message = await channel.fetch_message(int(message))
-    await message.reply(text)
+    await (await channel.fetch_message(int(message))).reply(text)
 
 
 @bot.command()
 @is_bot_owner()
-async def react(ctx, message: str, reaction: str):
+async def react(ctx: commands.Context, message: str, reaction: str):
     """Make the bot react to a message."""
     try:
         await ctx.message.delete()
     except:
         pass
     channel = ctx.channel
-    message = await channel.fetch_message(int(message))
-    await message.add_reaction(reaction)
-
-
-@bot.command()
-@is_bot_owner()
-async def announce(ctx, *, message: str):
-    """Send a global message to all server owners."""
-    await ctx.reply(f'Sent global message\n```{message}```')
-    ids = []
-    for guild in bot.guilds:
-        if int(guild.owner_id) not in ids:
-            await guild.owner.send(
-                f'Message from the dev!\n```{message}```(you are receiving this, because you own a server with this bot)')
-            ids.append(int(guild.owner_id))
+    await (await channel.fetch_message(int(message))).add_reaction(reaction)
 
 
 @bot.command()
@@ -207,11 +207,11 @@ async def raiseexception(ctx):
 
 @bot.command()
 @is_bot_owner()
-async def serverban(ctx, guild: discord.Guild, *, text: str):
+async def serverban(ctx: commands.Context, guild: discord.Guild, *, text: str):
     """Ban a server from using the bot."""
     n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
     if n > 0:
-        await ctx.response.send_message("Server already banned!", ephemeral=True)
+        await ctx.channel.send("Server already banned!")
         return
     doc = {
         "id": guild.id,
@@ -219,17 +219,19 @@ async def serverban(ctx, guild: discord.Guild, *, text: str):
         "owner": guild.owner,
         "reason": str(text)
     }
+    await bot.database.serverbans.insert_one(doc)
+
     embed = discord.Embed(title=f"{guild} has been banned.",
-                          description=f"Your server *{guild}* has been banned from using **{bot.user.name}**.",
+                          description=f"Your server *{guild}* has been banned from using **{getattr(bot, 'user', 'Kidney Bot')}**.",
                           color=discord.Color.red())
     embed.add_field(
         name=f"You can appeal by contacting __**{ctx.message.author}**__.", value="\u2800")
     embed.add_field(name="Reason", value=f"```{text}```")
-    embed.set_footer(text=bot.user, icon_url=bot.user.avatar)
-    await guild.owner.send(embed=embed)
+    embed.set_footer(text=bot.user, icon_url=bot.user.avatar.url)
+    if guild.owner is not None:
+        await guild.owner.send(embed=embed)
     await ctx.reply(
-        f"Server *{guild}* has been permanently blacklisted from using **{bot.user.name}**")
-    bot.database.serverbans.insert_one(doc)
+        f"Server *{guild}* has been permanently blacklisted from using **{getattr(bot, 'user', 'Kidney Bot')}**.")
     await guild.leave()
 
 
@@ -242,7 +244,7 @@ async def serverunban(ctx, guild: str):
         await ctx.reply("Server not banned!")
         return
     await bot.database.serverbans.delete_one({"id": guild})
-    await ctx.reply(f"Server *{guild}* has been unbanned from using **{bot.user.name}**")
+    await ctx.reply(f"Server *{guild}* has been unbanned from using **{getattr(bot, 'user', 'Kidney Bot')}**.")
 
 
 @bot.command()
@@ -252,13 +254,13 @@ async def createinvite(ctx, guild: discord.Guild):
     invite = None
     for channel in guild.text_channels:
         try:
-            invite = await channel.create_invite(max_uses=1, reason='bot developer requested server invite.')
+            invite = await channel.create_invite(max_uses=1, reason=bot.get_lang_string("main.createinvite.reason"))
             break
         except:
             pass
 
     if invite is None:
-        return await ctx.reply("Could not create invite.")
+        return await ctx.reply(bot.get_lang_string("main.createinvite.couldnt_create_invite"))
 
     await ctx.reply(invite)
 
@@ -270,20 +272,22 @@ async def reloadconfig(ctx):
     try:
         bot.config.reload()
     except Exception as e:
-        await ctx.reply(f"Could not reload config file.\n`{e}`")
+        await ctx.reply(f"{bot.get_lang_string("main.couldnt_reload_config")}\n`{e}`")
         return
 
-    await ctx.reply("Reloaded config file.")
+    await ctx.reply(bot.get_lang_string("main.reloaded_config"))
 
 @bot.command()
 @is_bot_owner()
-async def guild_debug_info(ctx: commands.Context, guild: discord.Guild = None):
+async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = None):
     message = await ctx.send("Generating debug report...")
     if guild is None:
         guild = ctx.guild
 
+    assert guild is not None
+
     embed = discord.Embed(title=f"Debug report for {guild} ({guild.id})", color=discord.Color.blurple())
-    embed.add_field(name=guild.name, value=f"""**Owner:** {guild.owner.mention} ({guild.owner_id})
+    embed.add_field(name=guild.name, value=f"""**Owner:** {getattr(guild.owner, "mention", None)} ({guild.owner_id})
                     **Created:** <t:{int(guild.created_at.timestamp())}>
                     **Members:** {guild.member_count}
                     **Non-bot members:** {len([m for m in guild.members if not m.bot])}
@@ -346,6 +350,11 @@ async def main():
             asyncio.create_task(user_count())
         else:
             logging.warning("No user count channel set, not counting users.")
+
+        if bot.config.heartbeat_url is not None:
+            asyncio.create_task(heartbeat())
+        else:
+            logging.warning("No heartbeat URL set, not sending heartbeats.")
 
         await bot.start(bot.config.token)
 

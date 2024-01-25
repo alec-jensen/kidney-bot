@@ -1,0 +1,14 @@
+{
+    "_comment1": "This is the config file for the bot. Please fill in the values below. Look here for more info: https://github.com/alec-jensen/kidney-bot/wiki/Config",
+    
+    "token": "SET ME!!",
+    "dbstring": "SET ME!!",
+    "ownerid": "SET ME!!",
+    "report_channel": "",
+    "user_count_channel": "",
+    "perspective_api_key": "",
+    "error_channel": "",
+    "prefix": "kb.",
+    "langfile": "lang/en.yml",
+    "heartbeat_url": ""
+}
