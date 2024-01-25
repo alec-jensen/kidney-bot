@@ -11,12 +11,11 @@ import os
 import logging
 import datetime
 import time
-from numpy import isin
 import regex as re
 
 from _version import __version__
 
-from utils.kidney_bot import KidneyBot, KBMember, KBUser
+from utils.kidney_bot import KidneyBot
 from utils.log_formatter import LogFormatter, LogFileFormatter
 from utils.checks import is_bot_owner
 

@@ -2,17 +2,17 @@
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
-from typing import Any
 import discord
 from discord.ext import commands
 import asyncio
 
+from utils.kidney_bot import KidneyBot
 from utils.config import Config
 from utils.database import Database, Schemas
 
 import logging
 
-def get_prefix(bot: commands.Bot, message: discord.Message) -> str:
+def get_prefix(bot: KidneyBot, message: discord.Message) -> list[str]:
     return commands.when_mentioned_or(bot.config.prefix)(bot, message)
 
 
