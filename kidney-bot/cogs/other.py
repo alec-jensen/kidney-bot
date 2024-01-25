@@ -168,15 +168,31 @@ class Other(commands.Cog):
 
         await ctx.reply(f'Sending global message\n```{message}```')
         ids = []
+
+        users: list[discord.User | discord.Member] = []
+
         for guild in self.bot.guilds:
-            if guild.owner is None: continue
-            if int(guild.owner.id) not in ids:
-                user_config = await self.bot.database.user_config.find_one(Schemas.UserConfig(user_id=guild.owner.id), Schemas.UserConfig)
+            if guild.owner_id not in ids and guild.owner is not None:
+                users.append(guild.owner)
+                ids.append(guild.owner_id)
+
+        doc = await self.bot.database.database.user_config.find({'announce_level': {'$gte': announce_level}}).to_list(length=None)
+
+        for user in doc:
+            if int(user['user_id']) not in ids:
+                users.append(await self.bot.fetch_user(user['user_id']))
+                ids.append(int(user['user_id']))
+
+        ids = []
+
+        for user in users:
+            if int(user.id) not in ids:
+                user_config = await self.bot.database.user_config.find_one(Schemas.UserConfig(user_id=user.id), Schemas.UserConfig)
 
                 assert type(user_config) == Schemas.UserConfig or user_config is None
 
                 if user_config is None:
-                    user_config = Schemas.UserConfig(user_id=guild.owner.id, announce_level=1)
+                    user_config = Schemas.UserConfig(user_id=user.id, announce_level=1)
 
                 if user_config.announce_level is None:
                     user_config.announce_level = 1
@@ -191,9 +207,9 @@ class Other(commands.Cog):
                 not_sent = 0
 
                 try:
-                    await guild.owner.send(
-                        f'Message from the dev!\n```{message}```(you are receiving this, because you own a server with this bot. If you do not want to receive these messages, run `/set_announce_level <level>`)')
-                    ids.append(int(guild.owner.id))
+                    await user.send(
+                        f'Message from the dev!\n```{message}```(you are receiving this, because you either own a server with this bot or opted in. If you do not want to receive these messages, run `/set_announce_level <level>`)')
+                    ids.append(int(user.id))
                     successfully_sent += 1
                 except:
                     not_sent += 1
