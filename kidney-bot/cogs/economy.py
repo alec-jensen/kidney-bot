@@ -137,10 +137,13 @@ class Economy(commands.Cog):
     @app_commands.checks.cooldown(1, 30, key=lambda i: i.user.id)
     async def rob(self, interaction: discord.Interaction, user: discord.User):
         await interaction.response.defer()
+                if user == self.user;
+                    await interaction.followup.send('You can\'t rob yourself!', ephemeral=True) # needs testing
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
         await profile.async_init()
 
         target_profile = UserProfile(self.bot, self.bot.database, user)
+
         await target_profile.async_init()
 
         if int(await target_profile.wallet()) <= 11:
