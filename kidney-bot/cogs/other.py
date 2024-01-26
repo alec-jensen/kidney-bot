@@ -214,7 +214,7 @@ class Other(commands.Cog):
                 except:
                     not_sent += 1
 
-                await ctx.reply(f'Successfully sent to {successfully_sent} guild owners, {not_sent} not sent.')
+        await ctx.reply(f'Successfully sent to {successfully_sent} guild owners, {not_sent} not sent.')
 
 async def setup(bot):
     await bot.add_cog(Other(bot))
