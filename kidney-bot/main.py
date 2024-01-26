@@ -50,14 +50,23 @@ statuses: list[discord.Game | discord.Streaming] = [discord.Game("with the fate 
                                     name="<servers> servers", url="https://kidneybot.alecj.tk"), discord.Game("/rockpaperscissors"),
                                 discord.Game("counting to infinity... twice"), discord.Game("attempting to break the sound barrier... of silence")]
 
+previous_statuses: list[discord.Game | discord.Streaming] = []
 
 async def status():
     await bot.wait_until_ready()
     while not bot.is_closed():
         current_status: discord.Game = random.choice(statuses) # type: ignore
+        while current_status in previous_statuses:
+            current_status = random.choice(statuses) # type: ignore
+
+        previous_statuses.append(current_status)
+
         current_status.name = current_status.name.replace("<users>", str(len(bot.users)))\
             .replace("<servers>", str(len(bot.guilds)))
         await bot.change_presence(activity=current_status)
+
+        if len(previous_statuses) > 3:
+            previous_statuses.pop(0)
 
         await asyncio.sleep(16)
 
