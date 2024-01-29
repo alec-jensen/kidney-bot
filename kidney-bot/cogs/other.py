@@ -345,6 +345,10 @@ class Other(commands.Cog):
 
         ids = []
 
+        successfully_sent = 0
+        not_sent = 0
+        error = 0
+
         for user in users:
             if int(user.id) not in ids:
                 user_config = await self.bot.database.user_config.find_one(Schemas.UserConfig(user_id=user.id), Schemas.UserConfig)
@@ -360,13 +364,12 @@ class Other(commands.Cog):
                     user_config.announce_level = 1
 
                 if user_config.announce_level == 0:
+                    not_sent += 1
                     continue
 
                 if user_config.announce_level < announce_level:
+                    not_sent += 1
                     continue
-
-                successfully_sent = 0
-                not_sent = 0
 
                 try:
                     await user.send(
@@ -374,9 +377,9 @@ class Other(commands.Cog):
                     ids.append(int(user.id))
                     successfully_sent += 1
                 except:
-                    not_sent += 1
+                    error += 1
 
-        await ctx.reply(f'Successfully sent to {successfully_sent} guild owners, {not_sent} not sent.')
+        await ctx.reply(f'Successfully sent to {successfully_sent} guild owners, {not_sent} not sent, {error} not sent due to error.')
 
 
 async def setup(bot):
