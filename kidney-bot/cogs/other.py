@@ -370,7 +370,7 @@ class Other(commands.Cog):
 
                 try:
                     await user.send(
-                        f'Message from the dev!\n```{message}```(you are receiving this, because you either own a server with this bot or opted in. If you do not want to receive these messages, run `/set_announce_level <level>`)')
+                        f'Message from the dev!\n{message}\n\n(you are receiving this, because you either own a server with this bot or opted in. If you do not want to receive these messages, run `/set_announce_level <level>`)')
                     ids.append(int(user.id))
                     successfully_sent += 1
                 except:
