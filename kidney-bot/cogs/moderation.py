@@ -8,8 +8,11 @@ from discord import app_commands
 from datetime import timedelta
 import humanize
 import logging
+from typing import Literal
+import asyncio
 
 from utils.kidney_bot import KidneyBot
+from utils.database import Schemas
 
 
 time_convert = {
@@ -55,18 +58,73 @@ class Moderation(commands.Cog):
         return seconds
 
     # TODO: implement configuration for ephemeral messages
-    async def ephemeral_moderation_messages(self, guild: discord.Guild) -> bool:
+    async def get_ephemeral_messages(self, guild: discord.Guild | None = None, user: discord.User | discord.Member | None = None) -> bool:
+        if guild is None and user is None:
+            raise ValueError('guild and user cannot both be None')
+        
+        if guild is not None:
+            doc: Schemas.GuildConfig = await self.bot.database.guild_config.find_one(Schemas.GuildConfig(guild.id), Schemas.GuildConfig) # type: ignore
+            if doc is not None:
+                if doc.ephemeral_setting_overpowers_user_setting or user is None:
+                    return bool(doc.ephemeral_moderation_messages)
+            
+        if user is not None:
+            doc2: Schemas.UserConfig = await self.bot.database.user_config.find_one(Schemas.UserConfig(user.id), Schemas.UserConfig) # type: ignore
+            if doc2 is not None:
+                return bool(doc2.ephemeral_moderation_messages)
+
         return True
 
     @commands.Cog.listener()
     async def on_ready(self):
         logging.info('Moderation cog loaded.')
 
+    ephemeral_messages = app_commands.Group(name='ephemeral_messages', description="Configure whether moderation messages are ephemeral or not")
+
+    @ephemeral_messages.command(name='guild', description="Configure whether moderation messages are ephemeral or not for the guild")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    async def ephemeral_messages_guild(self, interaction: discord.Interaction, ephemeral: Literal["Yes", "No"]):
+        ephemeralB = ephemeral == "Yes"
+        await interaction.response.defer(ephemeral=True)
+        await self.bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_moderation_messages": ephemeralB}}, upsert=True)
+
+        await interaction.followup.send(f"Moderation messages are now ephemeral: {ephemeral}", ephemeral=True)
+
+    @ephemeral_messages.command(name='force_guild_setting', description="Configure whether guild setting overpowers user setting")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    async def ephemeral_messages_force_guild_setting(self, interaction: discord.Interaction, force: Literal["Yes", "No"]):
+        forceB = force == "Yes"
+        await interaction.response.defer(ephemeral=True)
+        await self.bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_setting_overpowers_user_setting": forceB}}, upsert=True)
+
+        await interaction.followup.send(f"Guild setting overpowers user setting: {force}", ephemeral=True)
+
+    @ephemeral_messages.command(name='self', description="Configure whether moderation messages are ephemeral or not for yourself")
+    @app_commands.default_permissions(administrator=True)
+    @app_commands.guild_only()
+    async def ephemeral_messages_user(self, interaction: discord.Interaction, ephemeral: Literal["Yes", "No"]):
+        ephemeralB = ephemeral == "Yes"
+        await interaction.response.defer(ephemeral=True)
+        doc = asyncio.create_task(self.bot.database.guild_config.find_one(Schemas.GuildConfig(interaction.guild.id), Schemas.GuildConfig)) # type: ignore
+        await self.bot.database.user_config.update_one(Schemas.UserConfig(interaction.user.id), {"$set": {"ephemeral_moderation_messages": ephemeralB}}, upsert=True)
+
+        doc: Schemas.GuildConfig = await doc # type: ignore
+        if doc is not None:
+            if doc.ephemeral_setting_overpowers_user_setting:
+                await interaction.followup.send(f"Moderation messages are now ephemeral: {ephemeral}\n*(Due to the settings of this guild, all messages are forced to be {"ephemeral" if doc.ephemeral_moderation_messages else "not ephemeral"})*", ephemeral=True)
+            else:
+                await interaction.followup.send(f"Moderation messages are now ephemeral: {ephemeral}", ephemeral=True)
+        else:
+            await interaction.followup.send(f"Moderation messages are now ephemeral: {ephemeral}", ephemeral=True)
+
     @app_commands.command(name='nickname', description="Change nicknames")
     @app_commands.default_permissions(manage_nicknames=True)
     @app_commands.guild_only()
-    async def nickname(self, interaction: discord.Interaction, user: discord.Member, *, newnick: str):
-        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+    @app_commands.describe(user="The user to change the nickname of", newnick="The new nickname. Leave blank to reset the nickname")
+    async def nickname(self, interaction: discord.Interaction, user: discord.Member, *, newnick: str | None = None):
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild, interaction.user))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
@@ -84,13 +142,13 @@ class Moderation(commands.Cog):
             embed.add_field(name="New nickname", value=newnick, inline=False)
             embed.set_footer(
                 text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-            await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+            await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='purge', description="Purge messages")
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
     async def purge(self, interaction: discord.Interaction, limit: int, user: discord.Member = None):
-        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         msg = []
         if not user:
             await interaction.channel.purge(limit=limit, before=interaction.created_at)
@@ -107,13 +165,13 @@ class Moderation(commands.Cog):
         embed.add_field(name="Messages purged", value=limit, inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='mute', description="Mute users")
     @app_commands.default_permissions(mute_members=True)
     @app_commands.guild_only()
     async def mute(self, interaction: discord.Interaction, user: discord.Member, *, reason: str = None):
-        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
@@ -127,13 +185,13 @@ class Moderation(commands.Cog):
         embed.add_field(name="Muted", value=user.mention, inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='unmute', description="Unmute users")
     @app_commands.default_permissions(mute_members=True)
     @app_commands.guild_only()
     async def unmute(self, interaction: discord.Interaction, user: discord.Member):
-        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
@@ -150,13 +208,13 @@ class Moderation(commands.Cog):
         embed.add_field(name="Unmuted", value=user.mention, inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='tempmute', description="Timeout users")
     @app_commands.default_permissions(mute_members=True)
     @app_commands.guild_only()
     async def tempmute(self, interaction: discord.Interaction, user: discord.Member, time: str, *, reason: str = None):
-        await interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
@@ -178,7 +236,7 @@ class Moderation(commands.Cog):
         embed.add_field(name="Duration", value=time_formatted, inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
         await user.send(f"You have been muted in **{interaction.guild}** for *{time_formatted}*")
 
     @app_commands.command(name='kick', description="Kick users")
@@ -187,7 +245,7 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(kick_members=True)
     @app_commands.guild_only()
     async def kick(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
-        interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]
 
         converter: commands.MemberConverter = commands.MemberConverter()
@@ -227,7 +285,7 @@ class Moderation(commands.Cog):
             [user.mention for user in users]), inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='ban', description="Ban users")
     @app_commands.describe(users="The users to ban. Can be multiple users, comma separated.")
@@ -235,7 +293,7 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(ban_members=True)
     @app_commands.guild_only()
     async def ban(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
-        interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
         if delete_message_time is not None:
             try:
@@ -274,14 +332,14 @@ class Moderation(commands.Cog):
             [user.mention for user in users]), inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='unban', description="Unban users")
     @app_commands.describe(users="The users to unban. Can be multiple users, comma separated.")
     @app_commands.default_permissions(ban_members=True)
     @app_commands.guild_only()
     async def unban(self, interaction: discord.Interaction, users: str, reason: str = None):
-        interaction.response.defer(ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]
 
         converter: commands.MemberConverter = commands.MemberConverter()
@@ -304,7 +362,7 @@ class Moderation(commands.Cog):
             [user.mention for user in users]), inline=False)
         embed.set_footer(
             text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
-        await interaction.followup.send(embed=embed, ephemeral=await self.ephemeral_moderation_messages(interaction.guild))
+        await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
 
 async def setup(bot):

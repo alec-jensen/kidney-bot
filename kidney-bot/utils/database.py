@@ -316,21 +316,43 @@ class Schemas:
             })
         
     class UserConfig(BaseSchema):
-        def __init__(self, user_id: int | None = None, announce_level: int | None = None) -> None:
+        def __init__(self, user_id: int | None = None, announce_level: int | None = None, ephemeral_moderation_messages: bool | None = None) -> None:
             self.user_id: int | None = convert_except_none(user_id, int)
             self.announce_level: int | None = convert_except_none(announce_level, int)
+            self.ephemeral_moderation_messages: bool | None = convert_except_none(ephemeral_moderation_messages, bool)
 
         @classmethod
         def from_dict(cls, data: dict) -> 'Schemas.UserConfig':
             if data is None:
                 return cls()
 
-            return cls(data.get('user_id'), data.get('announce_level'))
+            return cls(data.get('user_id'), data.get('announce_level'), data.get('ephemeral_moderation_messages'))
         
         def to_dict(self) -> dict:
             return remove_none_values({
                 'user_id': self.user_id,
-                'announce_level': self.announce_level
+                'announce_level': self.announce_level,
+                'ephemeral_moderation_messages': self.ephemeral_moderation_messages
+            })
+        
+    class GuildConfig(BaseSchema):
+        def __init__(self, guild_id: int | None = None, ephemeral_moderation_messages: bool | None = None, ephemeral_setting_overpowers_user_setting: bool | None = None) -> None:
+            self.guild_id: int | None = convert_except_none(guild_id, int)
+            self.ephemeral_moderation_messages: bool | None = convert_except_none(ephemeral_moderation_messages, bool)
+            self.ephemeral_setting_overpowers_user_setting: bool | None = convert_except_none(ephemeral_setting_overpowers_user_setting, bool)
+
+        @classmethod
+        def from_dict(cls, data: dict) -> 'Schemas.GuildConfig':
+            if data is None:
+                return cls()
+
+            return cls(data.get('guild_id'), data.get('ephemeral_moderation_messages'), data.get('ephemeral_setting_overpowers_user_setting'))
+        
+        def to_dict(self) -> dict:
+            return remove_none_values({
+                'guild_id': self.guild_id,
+                'ephemeral_moderation_messages': self.ephemeral_moderation_messages,
+                'ephemeral_setting_overpowers_user_setting': self.ephemeral_setting_overpowers_user_setting
             })
 
 
@@ -342,7 +364,7 @@ class Collection:
         self.schema: Type[Schemas.BaseSchema] | None = schema
 
     """Find one document in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> dict | Schemas.BaseSchema | None:
+    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> dict | Type[Schemas.BaseSchema] | None:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
@@ -446,3 +468,7 @@ class Database:
     @property
     def user_config(self) -> Collection:
         return Collection(self.database.user_config, Schemas.UserConfig)
+    
+    @property
+    def guild_config(self) -> Collection:
+        return Collection(self.database.guild_config, Schemas.GuildConfig)

@@ -18,6 +18,7 @@ from _version import __version__
 from utils.kidney_bot import KidneyBot
 from utils.log_formatter import LogFormatter, LogFileFormatter
 from utils.checks import is_bot_owner
+from utils.database import Schemas
 
 time_start = time.perf_counter_ns()
 
@@ -114,8 +115,37 @@ async def on_guild_join(guild: discord.Guild):
                         value="\u2800")
         embed.add_field(name="Reason", value=f"```{doc['reason']}```")
         embed.set_footer(text=bot.user, icon_url=bot.user.avatar.url)
-        await guild.owner.send(embed=embed)
+        if guild.owner is not None:
+            await guild.owner.send(embed=embed)
+
         await guild.leave()
+
+    setup_channel = None
+
+    setup_channel = guild.system_channel
+
+    if setup_channel is None:
+        for channel in guild.text_channels:
+            if re.search(r'welcome|general|chat|main|lobby|bot', channel.name, re.IGNORECASE):
+                setup_channel = channel
+                break
+
+    if setup_channel is None:
+        for channel in guild.text_channels:
+            if channel.permissions_for(guild.me).send_messages:
+                setup_channel = channel
+                break
+
+    if setup_channel is None:
+        if guild.owner is not None:
+            setup_channel = guild.owner.dm_channel
+
+    embed = discord.Embed(title="Thanks for adding me!",
+                            description=f"Thanks for adding me to **{guild}**!\n\nTo get started, run `/setup` in a channel where I can send messages.",
+                            color=discord.Color.blurple())
+    
+    if setup_channel is not None:
+        await setup_channel.send(guild.owner.mention, embed=embed)
 
 
 @bot.command()
@@ -320,10 +350,21 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
                 possible_issues.append(f"Bot's role ({top_role.mention}) is below a normal member role ({role.mention}).")
                 
     highest_member_role = None
+    doc = await bot.database.autorole_settings.find_one(Schemas.AutoRoleSettings(guild.id))
+    autorole_roles = []
+    if doc is not None:
+        for role in doc.get("roles", []):
+            _role = guild.get_role(role.get(id, 0))
+            if _role is not None:
+                autorole_roles.append(_role)
+
     for role in guild.roles:
         if not _role_is_moderator(role):
             if highest_member_role is None or role.position > highest_member_role.position:
                 if re.search(r'member|access|fans', role.name, re.IGNORECASE):
+                    highest_member_role = role
+
+                if role in autorole_roles:
                     highest_member_role = role
 
     if highest_member_role is not None:
