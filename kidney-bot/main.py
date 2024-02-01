@@ -318,6 +318,15 @@ async def reloadconfig(ctx):
 
 @bot.command()
 @is_bot_owner()
+async def clearcache(ctx):
+    """Clear the bot's cache."""
+    for collection in bot.database.collections:
+        await collection.cache.clear()
+        
+    await ctx.reply("Cache cleared.")
+
+@bot.command()
+@is_bot_owner()
 async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = None):
     message = await ctx.send("Generating debug report...")
     if guild is None:

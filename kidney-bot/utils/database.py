@@ -115,7 +115,7 @@ class Schemas:
 
         def to_dict(self) -> dict:
             return remove_none_values({
-                'guild_id': self.guild,
+                'guild': self.guild,
                 'enabled': self.enabled,
                 'TOXICITY': self.TOXICITY,
                 'SEVERE_TOXICITY': self.SEVERE_TOXICITY,
@@ -400,7 +400,7 @@ class Collection:
 
         if schema is None:
             return document
-        
+
         return schema.from_dict(document)
 
     """Find all documents in the collection. If a schema is provided, it will be converted to the schema."""
@@ -425,7 +425,7 @@ class Collection:
     async def update_one(self, query: dict | Schemas.BaseSchema, update: dict, upsert: bool = False) -> None:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
-        
+
         await self.collection.update_one(query, update, upsert=upsert)
 
         asyncio.create_task(self.cache.update(query, update))
@@ -462,6 +462,8 @@ class Database:
 
         self.connected = False
 
+        self.collections = []
+
     async def connect(self) -> None:
         if self.connected:
             return
@@ -482,7 +484,8 @@ class Database:
 
         self.database: motor.motor_asyncio.AsyncIOMotorDatabase = self.client.data
 
-        self.active_guard_settings = Collection(self, self.database.active_guard_settings)
+        self.active_guard_settings = Collection(
+            self, self.database.active_guard_settings)
 
         self.ai_detection = Collection(self, self.database.ai_detection)
 
@@ -496,10 +499,16 @@ class Database:
 
         self.serverbans = Collection(self, self.database.serverbans)
 
-        self.autorolesettings = Collection(self, self.database.autorolesettings)
+        self.autorolesettings = Collection(
+            self, self.database.autorolesettings)
 
         self.exceptions = Collection(self, self.database.exceptions)
 
-        self.user_config = Collection(self, self.database.user_config, Schemas.UserConfig)
+        self.user_config = Collection(
+            self, self.database.user_config, Schemas.UserConfig)
 
-        self.guild_config = Collection(self, self.database.guild_config, Schemas.GuildConfig)
+        self.guild_config = Collection(
+            self, self.database.guild_config, Schemas.GuildConfig)
+
+        self.collections = [self.active_guard_settings, self.ai_detection, self.automodsettings, self.currency, self.reports,
+                            self.scammer_list, self.serverbans, self.autorolesettings, self.exceptions, self.user_config, self.guild_config]

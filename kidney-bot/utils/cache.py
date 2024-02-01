@@ -122,6 +122,9 @@ class Cache:
 
         await self.remove(query)
         await self.add(new_obj)
+    
+    async def clear(self):
+        self._storage = []
 
     async def _cleanup(self):
         logging.info('Running cache cleanup')
