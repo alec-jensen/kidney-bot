@@ -87,7 +87,7 @@ class Schemas:
                      PROFANITY: int | None = None, THREAT: int | None = None,
                      FLIRTATION: int | None = None, OBSCENE: int | None = None,
                      SPAM: int | None = None) -> None:
-            self.guild_id: int | None = convert_except_none(guild, int)
+            self.guild: int | None = convert_except_none(guild, int)
             self.enabled: bool | None = convert_except_none(enabled, bool)
             self.TOXICITY: int | None = convert_except_none(TOXICITY, int)
             self.SEVERE_TOXICITY: int | None = convert_except_none(
@@ -106,7 +106,7 @@ class Schemas:
             if data is None:
                 return cls()
 
-            return cls(data.get('guild_id'), data.get('enabled'),
+            return cls(data.get('guild'), data.get('enabled'),
                        data.get('TOXICITY'), data.get(
                            'SEVERE_TOXICITY'), data.get('IDENTITY_ATTACK'),
                        data.get('INSULT'), data.get(
@@ -115,7 +115,7 @@ class Schemas:
 
         def to_dict(self) -> dict:
             return remove_none_values({
-                'guild_id': self.guild_id,
+                'guild_id': self.guild,
                 'enabled': self.enabled,
                 'TOXICITY': self.TOXICITY,
                 'SEVERE_TOXICITY': self.SEVERE_TOXICITY,
