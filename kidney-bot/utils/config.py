@@ -47,35 +47,45 @@ class Config:
                 self.owner_ids = None
 
             self.report_channel: int | None = convert_except_none(
-                self.conf_json.get('report_channel'), int)
+                self.conf_json.get('report_channel'), int, error=False)
             if self.report_channel is None:
                 logging.warning(
                     'No report channel configured, user reports will be disabled.')
 
             self.perspective_api_key: str | None = self.conf_json.get(
                 'perspective_api_key')
+            if self.perspective_api_key == '':
+                self.perspective_api_key = None
+
             if self.perspective_api_key is None:
                 logging.warning(
                     'No Perspective API key configured, perspective will be disabled.')
 
             self.error_channel: int | None = convert_except_none(
-                self.conf_json.get('error_channel'), int)
+                self.conf_json.get('error_channel'), int, error=False)
             if self.error_channel is None:
                 logging.warning(
                     'No error channel configured, errors will only be logged to console.')
+                
             self.user_count_channel_id: int | None = convert_except_none(
-                self.conf_json.get('user_count_channel'), int)
+                self.conf_json.get('user_count_channel'), int, error=False)
 
             self.prefix: str = self.conf_json.get('prefix', 'kb.')
+            if self.prefix == '':
+                self.prefix = 'kb.'
 
             self.langfile: str = self.conf_json.get(
                 'langfile', 'lang/en_us.yml')
+            if self.langfile == '':
+                self.langfile = 'lang/en_us.yml'
 
             if not os.path.exists(self.langfile):
                 raise FileNotFoundError(
                     f'Language file {self.langfile} does not exist.')
 
             self.heartbeat_url: str = self.conf_json.get('heartbeat_url', None)
+            if self.heartbeat_url == '':
+                self.heartbeat_url = None
 
             with open(self.langfile, 'r') as f:
                 self.lang = yaml.safe_load(f)

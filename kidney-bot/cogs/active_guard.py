@@ -73,7 +73,7 @@ class ReportView(discord.ui.View):
     @discord.ui.button(label='Deny', style=discord.ButtonStyle.red, custom_id='report:deny')
     async def deny(self, interaction: discord.Interaction, button: discord.ui.Button):
         report_id = interaction.message.embeds[0].footer.text.split('`')[1]
-        bot = interaction.client
+        bot: KidneyBot = interaction.client # type: ignore
         report: Schemas.Reports = await bot.database.reports.find_one({"report_id": report_id}, Schemas.Reports)
         if report is None:
             await interaction.response.send_message('Report not found.', ephemeral=True)
@@ -119,7 +119,7 @@ class ActiveGuard(commands.Cog):
         if message.author.bot:
             return
         
-        doc = asyncio.create_task(self.bot.database.activeguardsettings.find_one({"guild_id": message.guild.id}))
+        doc = asyncio.create_task(self.bot.database.active_guard_settings.find_one({"guild_id": message.guild.id}))
         user_doc = asyncio.create_task(self.bot.database.scammer_list.find_one({"user": message.author.id}))
 
         if message.channel.type is discord.ChannelType.private:
@@ -140,7 +140,7 @@ class ActiveGuard(commands.Cog):
         if after.author.bot:
             return
         
-        doc = asyncio.create_task(self.bot.database.activeguardsettings.find_one({"guild_id": after.guild.id}))
+        doc = asyncio.create_task(self.bot.database.active_guard_settings.find_one({"guild_id": after.guild.id}))
         user_doc = asyncio.create_task(self.bot.database.scammer_list.find_one({"user": after.author.id}))
 
         if after.channel.type is discord.ChannelType.private:
@@ -159,7 +159,7 @@ class ActiveGuard(commands.Cog):
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
         user_doc = asyncio.create_task(self.bot.database.scammer_list.find_one({"user": after.id}))
-        doc = await self.bot.database.activeguardsettings.find_one({"guild_id": before.guild.id})
+        doc = await self.bot.database.active_guard_settings.find_one({"guild_id": before.guild.id})
         if doc is not None and doc.get('block_known_spammers') is True:
             if await user_doc is not None:
                 await after.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
@@ -169,7 +169,7 @@ class ActiveGuard(commands.Cog):
     @commands.Cog.listener()
     async def on_user_update(self, before: discord.User, after: discord.User):
         user_doc = asyncio.create_task(self.bot.database.scammer_list.find_one({"user": after.id}))
-        doc = await self.bot.database.activeguardsettings.find_one({"guild_id": after.id})
+        doc = await self.bot.database.active_guard_settings.find_one({"guild_id": after.id})
         if doc is not None and doc.get('block_known_spammers') is True:
             if await user_doc is not None:
                 await after.send(f'You have been banned from {before.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
@@ -179,7 +179,7 @@ class ActiveGuard(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         user_doc = asyncio.create_task(self.bot.database.scammer_list.find_one({"user": member.id}))
-        doc = await self.bot.database.activeguardsettings.find_one({"guild_id": member.guild.id})
+        doc = await self.bot.database.active_guard_settings.find_one({"guild_id": member.guild.id})
         if doc is not None and doc.get('block_known_spammers') is True:
             if await user_doc is not None:
                 await member.send(f'You have been banned from {member.guild.name} for being on the global blacklist. You can appeal this in our support server. https://discord.com/invite/TsuZCbz5KD')
@@ -188,7 +188,7 @@ class ActiveGuard(commands.Cog):
 
     @commands.Cog.listener()
     async def on_typing(self, channel: discord.TextChannel, user: discord.User, when: datetime.datetime):
-        doc = await self.bot.database.activeguardsettings.find_one({"guild_id": channel.guild.id})
+        doc = await self.bot.database.active_guard_settings.find_one({"guild_id": channel.guild.id})
         if doc is not None and doc.get('block_known_spammers') is True:
             doc = await self.bot.database.scammer_list.find_one({"user": user.id})
             if doc is not None:
@@ -203,15 +203,15 @@ class ActiveGuard(commands.Cog):
     async def block_known_spammers(self, interaction: discord.Interaction, state: Literal['on', 'off']):
         await interaction.response.defer(ephemeral=True)
         # Check if the guild has a document in the database, if not create one
-        if await self.bot.database.activeguardsettings.find_one({"guild_id": interaction.guild.id}) is None:
-            await self.bot.database.activeguardsettings.insert_one({"guild_id": interaction.guild.id})
+        if await self.bot.database.active_guard_settings.find_one({"guild_id": interaction.guild.id}) is None:
+            await self.bot.database.active_guard_settings.insert_one({"guild_id": interaction.guild.id})
 
         if state == 'on':
-            await self.bot.database.activeguardsettings.update_one({"guild_id": interaction.guild.id},
+            await self.bot.database.active_guard_settings.update_one({"guild_id": interaction.guild.id},
                                                       {"$set": {"block_known_spammers": True}})
             await interaction.followup.send('ActiveGuard will now block known spammers.', ephemeral=True)
         else:
-            await self.bot.database.activeguardsettings.update_one({"guild_id": interaction.guild.id},
+            await self.bot.database.active_guard_settings.update_one({"guild_id": interaction.guild.id},
                                                       {"$set": {"block_known_spammers": False}})
             await interaction.followup.send('ActiveGuard will no longer block known spammers.', ephemeral=True)
 

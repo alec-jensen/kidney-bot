@@ -5,13 +5,22 @@
 import logging
 from typing import Any, Type
 import motor.motor_asyncio
+import asyncio
+
+from utils.cache import Cache
 
 
-def convert_except_none(value, type):
+def convert_except_none(value, type, default=None, error=True) -> Any:
     if value is None:
         return None
 
-    return type(value)
+    try:
+        return type(value)
+    except ValueError:
+        if error:
+            raise ValueError(f'Could not convert {value} to {type}')
+        else:
+            return default
 
 
 def remove_none_values(dictionary: dict) -> dict:
@@ -125,7 +134,8 @@ class Schemas:
             self.guild: int | None = convert_except_none(guild, int)
             self.log_channel: int | None = convert_except_none(
                 log_channel, int)
-            self.whitelist: list[int] | None = convert_except_none(whitelist, list)
+            self.whitelist: list[int] | None = convert_except_none(
+                whitelist, list)
             self.permissions_timeout: int | None = convert_except_none(
                 permissions_timeout, int)
             self.permissions_timeout_whitelist: list[int] | None = convert_except_none(
@@ -314,12 +324,14 @@ class Schemas:
                 'user_id': self.user_id,
                 'always_report_errors': self.always_report_errors
             })
-        
+
     class UserConfig(BaseSchema):
         def __init__(self, user_id: int | None = None, announce_level: int | None = None, ephemeral_moderation_messages: bool | None = None) -> None:
             self.user_id: int | None = convert_except_none(user_id, int)
-            self.announce_level: int | None = convert_except_none(announce_level, int)
-            self.ephemeral_moderation_messages: bool | None = convert_except_none(ephemeral_moderation_messages, bool)
+            self.announce_level: int | None = convert_except_none(
+                announce_level, int)
+            self.ephemeral_moderation_messages: bool | None = convert_except_none(
+                ephemeral_moderation_messages, bool)
 
         @classmethod
         def from_dict(cls, data: dict) -> 'Schemas.UserConfig':
@@ -327,19 +339,21 @@ class Schemas:
                 return cls()
 
             return cls(data.get('user_id'), data.get('announce_level'), data.get('ephemeral_moderation_messages'))
-        
+
         def to_dict(self) -> dict:
             return remove_none_values({
                 'user_id': self.user_id,
                 'announce_level': self.announce_level,
                 'ephemeral_moderation_messages': self.ephemeral_moderation_messages
             })
-        
+
     class GuildConfig(BaseSchema):
         def __init__(self, guild_id: int | None = None, ephemeral_moderation_messages: bool | None = None, ephemeral_setting_overpowers_user_setting: bool | None = None) -> None:
             self.guild_id: int | None = convert_except_none(guild_id, int)
-            self.ephemeral_moderation_messages: bool | None = convert_except_none(ephemeral_moderation_messages, bool)
-            self.ephemeral_setting_overpowers_user_setting: bool | None = convert_except_none(ephemeral_setting_overpowers_user_setting, bool)
+            self.ephemeral_moderation_messages: bool | None = convert_except_none(
+                ephemeral_moderation_messages, bool)
+            self.ephemeral_setting_overpowers_user_setting: bool | None = convert_except_none(
+                ephemeral_setting_overpowers_user_setting, bool)
 
         @classmethod
         def from_dict(cls, data: dict) -> 'Schemas.GuildConfig':
@@ -347,7 +361,7 @@ class Schemas:
                 return cls()
 
             return cls(data.get('guild_id'), data.get('ephemeral_moderation_messages'), data.get('ephemeral_setting_overpowers_user_setting'))
-        
+
         def to_dict(self) -> dict:
             return remove_none_values({
                 'guild_id': self.guild_id,
@@ -359,44 +373,62 @@ class Schemas:
 class Collection:
     """Wrapper for motor.motor_asyncio.AsyncIOMotorCollection. If a schema is provided, all queries will be converted to the schema."""
 
-    def __init__(self, collection: motor.motor_asyncio.AsyncIOMotorCollection, schema: Type[Schemas.BaseSchema] | None = None) -> None:
+    def __init__(self, database: 'Database', collection: motor.motor_asyncio.AsyncIOMotorCollection, schema: Type[Schemas.BaseSchema] | None = None) -> None:
         self.collection: motor.motor_asyncio.AsyncIOMotorCollection = collection
         self.schema: Type[Schemas.BaseSchema] | None = schema
+        self.database = database
+        self.cache = Cache(60*5)
+
+        asyncio.create_task(self.cache.cleanup_task())
 
     """Find one document in the collection. If a schema is provided, it will be converted to the schema."""
     async def find_one(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> dict | Type[Schemas.BaseSchema] | None:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
-        document = await self.collection.find_one(query)
+        document = await self.cache.get_one(query)
+        if document is None:
+            document = await self.collection.find_one(query)
+            if document is not None:
+                await self.cache.add(document)
+
         if schema is None:
             schema = self.schema
 
         if document is None:
             return None
 
-        return document if schema is None else schema.from_dict(document)
+        if schema is None:
+            return document
+        
+        return schema.from_dict(document)
 
     """Find all documents in the collection. If a schema is provided, it will be converted to the schema."""
     async def find(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> motor.motor_asyncio.AsyncIOMotorCursor | list[Schemas.BaseSchema]:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
-        documents: motor.MotorCursor = await self.collection.find(query) # type: ignore
+        documents: motor.MotorCursor = self.collection.find(query)
+        documents = await documents.to_list(length=None)
+        await self.cache.add_many(documents)
+
         if schema is None:
             schema = self.schema
 
         if schema is None:
             return documents
 
-        return [self.schema.from_dict(document) for document in documents] # type: ignore
+        # type: ignore
+        return [self.schema.from_dict(document) for document in documents]
 
     """Update one document in the collection."""
     async def update_one(self, query: dict | Schemas.BaseSchema, update: dict, upsert: bool = False) -> None:
-        if isinstance(query, dict):
-            await self.collection.update_one(query, update, upsert=upsert)
-        else:
-            await self.collection.update_one(query.to_dict(), update, upsert=upsert)
+        if isinstance(query, Schemas.BaseSchema):
+            query = query.to_dict()
+        
+        await self.collection.update_one(query, update, upsert=upsert)
+
+        asyncio.create_task(self.cache.update(query, update))
 
     """Delete one document in the collection."""
     async def delete_one(self, query: dict | Schemas.BaseSchema) -> None:
@@ -405,12 +437,16 @@ class Collection:
 
         await self.collection.delete_one(query)
 
+        asyncio.create_task(self.cache.remove(query))
+
     """Insert one document in the collection."""
     async def insert_one(self, document: dict | Schemas.BaseSchema) -> None:
         if isinstance(document, Schemas.BaseSchema):
             document = document.to_dict()
 
         await self.collection.insert_one(document)
+
+        asyncio.create_task(self.cache.add(document))
 
     """Count the number of documents in the collection."""
     async def count_documents(self, query: dict | Schemas.BaseSchema) -> int:
@@ -422,53 +458,48 @@ class Collection:
 
 class Database:
     def __init__(self, dbstring: str) -> None:
+        self.dbstring: str = dbstring
+
+        self.connected = False
+
+    async def connect(self) -> None:
+        if self.connected:
+            return
+
         logging.info(f'Connecting to database.')
         self.client: motor.motor_asyncio.AsyncIOMotorClient = motor.motor_asyncio.AsyncIOMotorClient(
-            dbstring)
+            self.dbstring, serverSelectionTimeoutMS=1000)  # TODO: change to 5000
+
+        try:
+            await self.client.server_info()
+        except Exception as e:
+            logging.critical(f'Failed to connect to database.')
+            raise e
+
         logging.info(f'Connected to database.')
+
+        self.connected = True
 
         self.database: motor.motor_asyncio.AsyncIOMotorDatabase = self.client.data
 
-    @property
-    def activeguardsettings(self) -> Collection:
-        return Collection(self.database.active_guard_settings)
+        self.active_guard_settings = Collection(self, self.database.active_guard_settings)
 
-    @property
-    def ai_detection(self) -> Collection:
-        return Collection(self.database.ai_detection)
+        self.ai_detection = Collection(self, self.database.ai_detection)
 
-    @property
-    def automodsettings(self) -> Collection:
-        return Collection(self.database.automodsettings)
+        self.automodsettings = Collection(self, self.database.automodsettings)
 
-    @property
-    def currency(self) -> Collection:
-        return Collection(self.database.currency)
+        self.currency = Collection(self, self.database.currency)
 
-    @property
-    def reports(self) -> Collection:
-        return Collection(self.database.reports)
+        self.reports = Collection(self, self.database.reports)
 
-    @property
-    def scammer_list(self) -> Collection:
-        return Collection(self.database.scammer_list)
+        self.scammer_list = Collection(self, self.database.scammer_list)
 
-    @property
-    def serverbans(self) -> Collection:
-        return Collection(self.database.serverbans)
+        self.serverbans = Collection(self, self.database.serverbans)
 
-    @property
-    def autorole_settings(self) -> Collection:
-        return Collection(self.database.autorole_settings)
+        self.autorolesettings = Collection(self, self.database.autorolesettings)
 
-    @property
-    def exceptions(self) -> Collection:
-        return Collection(self.database.exceptions)
-    
-    @property
-    def user_config(self) -> Collection:
-        return Collection(self.database.user_config, Schemas.UserConfig)
-    
-    @property
-    def guild_config(self) -> Collection:
-        return Collection(self.database.guild_config, Schemas.GuildConfig)
+        self.exceptions = Collection(self, self.database.exceptions)
+
+        self.user_config = Collection(self, self.database.user_config, Schemas.UserConfig)
+
+        self.guild_config = Collection(self, self.database.guild_config, Schemas.GuildConfig)

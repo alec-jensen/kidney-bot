@@ -99,6 +99,7 @@ async def heartbeat():
 
 @bot.listen('on_ready')
 async def on_ready():
+    await bot.wait_until_ready()
     logging.info(f"Kidney Bot {__version__}")
     logging.info(f"Ready in {(time.perf_counter_ns() - time_start) / 1e9} seconds.")
     logging.info(f"Logged in as {bot.user} ({bot.user.id})")
@@ -350,7 +351,7 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
                 possible_issues.append(f"Bot's role ({top_role.mention}) is below a normal member role ({role.mention}).")
                 
     highest_member_role = None
-    doc = await bot.database.autorole_settings.find_one(Schemas.AutoRoleSettings(guild.id))
+    doc = await bot.database.autorolesettings.find_one(Schemas.AutoRoleSettings(guild.id))
     autorole_roles = []
     if doc is not None:
         for role in doc.get("roles", []):
@@ -384,28 +385,56 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
 
     await message.edit(content="", embed=embed)
 
+status_task: asyncio.Task | None = None
+user_count_task: asyncio.Task | None = None
+heartbeat_task: asyncio.Task | None = None
 
 async def main():
+    global status_task, user_count_task, heartbeat_task, cache_cleanup_task
+    
     async with bot:
         for filename in os.listdir(os.path.join(os.path.dirname(__file__), "cogs")):
             if filename.endswith('.py'):
                 if not filename.startswith('-'):
                     await bot.load_extension(f'cogs.{filename[:-3]}')
 
-        # Why does the status stop working after a while?
-        asyncio.create_task(status())
+        await bot.database.connect()
+
+        # Wait for database to connect
+        while not bot.database.connected:
+            await asyncio.sleep(0.1)
+
+        status_task = asyncio.create_task(status())
 
         if bot.config.user_count_channel_id is not None:
-            asyncio.create_task(user_count())
+            user_count_task = asyncio.create_task(user_count())
         else:
             logging.warning("No user count channel set, not counting users.")
 
         if bot.config.heartbeat_url is not None:
-            asyncio.create_task(heartbeat())
+            heartbeat_task = asyncio.create_task(heartbeat())
         else:
             logging.warning("No heartbeat URL set, not sending heartbeats.")
 
         await bot.start(bot.config.token)
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass
+
+    logging.info("Shutting down...")
+
+    if status_task is not None:
+        status_task.cancel()
+    if user_count_task is not None:
+        user_count_task.cancel()
+    if heartbeat_task is not None:
+        heartbeat_task.cancel()
+
+    bot.database.client.close()
+
+    asyncio.run(bot.close())
+
+    logging.info("Shutdown complete.")

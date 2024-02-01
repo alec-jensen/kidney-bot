@@ -38,7 +38,7 @@ class SetupView(discord.ui.View):
         await interaction.response.send_message(embed=embed, view=view)
         await view.wait()
         if view.value is True:
-            await bot.database.activeguardsettings.update_one(Schemas.ActiveGuardSettings(guild_id=interaction.guild.id), {'$set': {'block_known_spammers': True}}, upsert=True)
+            await bot.database.active_guard_settings.update_one(Schemas.ActiveGuardSettings(guild_id=interaction.guild.id), {'$set': {'block_known_spammers': True}}, upsert=True)
 
     @discord.ui.button(label='Set up AI Detection', style=discord.ButtonStyle.blurple)
     async def ai_detection(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -122,7 +122,7 @@ class SetupView(discord.ui.View):
             await interaction.channel.send(msg, view=view2)
         await view2.wait()
 
-        await bot.database.autorole_settings.update_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), {'$set': {'roles': roles, 'BotsGetRoles': view2.value}}, upsert=True)
+        await bot.database.autorolesettings.update_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), {'$set': {'roles': roles, 'BotsGetRoles': view2.value}}, upsert=True)
 
     @discord.ui.button(label='Set up Moderation', style=discord.ButtonStyle.blurple)
     async def moderation(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -194,7 +194,7 @@ class Other(commands.Cog):
     async def guild_settings_overview(self, interaction: discord.Interaction):
         embed = discord.Embed(
             title='Guild Settings Overview', color=discord.Color.blue())
-        doc: Schemas.ActiveGuardSettings = await self.bot.database.activeguardsettings.find_one(Schemas.ActiveGuardSettings(guild_id=interaction.guild.id), Schemas.ActiveGuardSettings)
+        doc: Schemas.ActiveGuardSettings = await self.bot.database.active_guard_settings.find_one(Schemas.ActiveGuardSettings(guild_id=interaction.guild.id), Schemas.ActiveGuardSettings)
         if doc is not None:
             embed.add_field(name='Active Guard', value=f'Block known spammers: {
                             doc.block_known_spammers}')
@@ -241,7 +241,7 @@ class Other(commands.Cog):
                             \nWhitelist: {", ".join(whitelist)}\nPermissions Timeout: {permissions_timeout}\
                             \nPermissions Timeout Whitelist: {", ".join(permissions_timeout_whitelist)}')
 
-        doc3: Schemas.AutoRoleSettings = await self.bot.database.autorole_settings.find_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), Schemas.AutoRoleSettings)
+        doc3: Schemas.AutoRoleSettings = await self.bot.database.autorolesettings.find_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), Schemas.AutoRoleSettings)
         if doc3 is not None:
             roles = []
             role: dict

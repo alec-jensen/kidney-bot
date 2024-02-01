@@ -87,6 +87,7 @@ class Economy(commands.Cog):
         await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="deposit", description='Deposit beans')
+    @app_commands.describe(amount="Numerical value, 'all', or 'half'")
     async def deposit(self, interaction: discord.Interaction, amount: str):
         await interaction.response.defer()
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
@@ -110,6 +111,7 @@ class Economy(commands.Cog):
                                                     ephemeral=True)
 
     @app_commands.command(name="withdraw", description="Withdraw beans")
+    @app_commands.describe(amount="Numerical value, 'all', or 'half'")
     async def withdraw(self, interaction: discord.Interaction, amount: str):
         await interaction.response.defer()
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
