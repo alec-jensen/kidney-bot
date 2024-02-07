@@ -148,6 +148,12 @@ async def on_guild_join(guild: discord.Guild):
     if setup_channel is not None:
         await setup_channel.send(guild.owner.mention, embed=embed)
 
+# secret thelorbster43e mode
+@bot.listen('on_message')
+async def on_message(message: discord.Message):
+    if message.content.lower() == "cheese":
+        await message.add_reaction("🧀")
+
 
 @bot.command()
 @is_bot_owner()
