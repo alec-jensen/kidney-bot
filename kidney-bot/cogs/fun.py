@@ -66,9 +66,9 @@ class Fun(commands.Cog):
     async def cat(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
-            async with cs.get('https://aws.random.cat/meow') as r:
+            async with cs.get('https://cataas.com/cat/cute?json=true') as r:
                 res = await r.json()
-                await interaction.followup.send(res["file"])
+                await interaction.followup.send(f"https://cataas.com/cat/{res['_id']}")
 
     @app_commands.command(name="meme", description="🤣")
     async def meme(self, interaction: discord.Interaction):
