@@ -95,12 +95,11 @@ async def heartbeat():
                     async with session.post(bot.config.heartbeat_url) as resp:
                         if resp.status != 200:
                             logging.warning(f"Heartbeat failed with status {resp.status}")
-
-            await asyncio.sleep(30)
         except Exception as e:
-            traceback.print_exc()
-            logging.error(f"Heartbeat failed with exception: {e}")
-            await asyncio.sleep(30)
+            logging.error(f"Heartbeat failed with exception {e}")
+            logging.error(traceback.format_exc())
+        
+        await asyncio.sleep(30)
 
 
 @bot.listen('on_ready')
@@ -444,6 +443,9 @@ if __name__ == '__main__':
         asyncio.run(main())
     except KeyboardInterrupt:
         pass
+    except Exception as e:
+        logging.critical(f"Fatal error: {e}")
+        logging.critical(traceback.format_exc())
 
     logging.info("Shutting down...")
 
@@ -454,7 +456,8 @@ if __name__ == '__main__':
     if heartbeat_task is not None:
         heartbeat_task.cancel()
 
-    bot.database.client.close()
+    if bot.database.connected:
+        bot.database.client.close()
 
     asyncio.run(bot.close())
 

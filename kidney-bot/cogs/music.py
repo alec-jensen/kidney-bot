@@ -10,6 +10,7 @@ import youtube_dl
 import pafy
 import asyncio
 import logging
+import traceback
 
 from utils.kidney_bot import KidneyBot
 
@@ -20,6 +21,43 @@ class Music(commands.Cog):
         self.bot: KidneyBot = bot
 
         self.queue = {}
+
+        self.stale_channels: dict[int, int] = {}
+
+        asyncio.create_task(self.stale_channel_checker())
+
+    async def stale_channel_checker(self):
+        while True:
+            try:
+                for client in self.bot.voice_clients:
+                    member: discord.Member
+                    stale = False
+                    for member in client.channel.members:
+                        if not member.bot:
+                            stale = True
+                            break
+
+                    if not stale:
+                        if client.channel.id not in self.stale_channels.keys():
+                            self.stale_channels[client.channel.id] = time.time()
+                        else:
+                            if time.time() - self.stale_channels.get(client.channel.id, 0) > 300:
+                                await client.disconnect(force=True)
+                                del self.stale_channels[client.channel.id]
+                    else:
+                        if client.channel.id in self.stale_channels.keys():
+                            del self.stale_channels[client.channel.id]
+
+                for channel_id in self.stale_channels.keys():
+                    if time.time() - self.stale_channels[channel_id] > 300:
+                        del self.stale_channels[channel_id]
+
+            except Exception as e:
+                logging.error(f"Error in stale channel checker: {e}")
+                logging.error(traceback.format_exc())
+
+            await asyncio.sleep(60)
+
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -59,16 +97,17 @@ class Music(commands.Cog):
 
     async def play_song(self, interaction: discord.Interaction, song):
         voice: discord.VoiceProtocol = interaction.guild.voice_client
-        if not voice:
+        if not voice or not voice.channel:
             await interaction.user.voice.channel.connect()
             voice = interaction.guild.voice_client
         url = pafy.new(song).getbestaudio().url
-        voice.play(discord.PCMVolumeTransformer(discord.FFmpegPCMAudio(url, options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5")),
-                   after=lambda error: self.bot.loop.create_task(self.check_queue(interaction)))
+        logging.info(f"Playing {url}")
+        voice.play(discord.FFmpegPCMAudio(url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"),
+                   after=lambda e: self.bot.loop.create_task(self.check_queue(interaction)))
         voice.source.volume = 0.5
 
     @app_commands.command(name='play', description='Play a song')
-    @app_commands.checks.cooldown(1, 20, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
     @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, *, song: str):
         if not interaction.user.voice:
