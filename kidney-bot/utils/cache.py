@@ -127,7 +127,6 @@ class Cache:
         self._storage = []
 
     async def _cleanup(self):
-        logging.info('Running cache cleanup')
         self._last_cleanup = time.time()
 
         start_size = len(self._storage)
@@ -136,7 +135,8 @@ class Cache:
 
         end_size = len(self._storage)
 
-        logging.info(f'Cache cleanup complete. Removed {start_size - end_size} items')
+        if start_size - end_size > 0:
+            logging.info(f'Cache cleanup complete. Removed {start_size - end_size} items. Took {time.time() - self._last_cleanup} seconds.')
 
     async def cleanup_task(self):
         """

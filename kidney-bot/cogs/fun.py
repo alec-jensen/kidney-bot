@@ -141,8 +141,7 @@ class Fun(commands.Cog):
             image = flag.url
         if flag_url is not None:
             image = flag_url
-
-        await interaction.response.defer()
+        
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.fight_under_this_flag(), filename='fight_under_this_flag.png'))
 
@@ -161,7 +160,7 @@ class Fun(commands.Cog):
         else:
             await interaction.followup.send('Something went wrong, please try again', ephemeral=True)
             return
-        await interaction.response.defer()
+        
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.uwu_discord(), filename='uwu_discord.png'))
 
@@ -180,7 +179,7 @@ class Fun(commands.Cog):
         else:
             await interaction.followup.send('Something went wrong, please try again', ephemeral=True)
             return
-        await interaction.response.defer()
+        
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.rip(), filename='rip.png'))
 
