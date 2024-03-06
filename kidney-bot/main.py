@@ -12,6 +12,7 @@ import logging
 import datetime
 import time
 import regex as re
+import traceback
 
 from _version import __version__
 
@@ -88,13 +89,18 @@ async def user_count():
 async def heartbeat():
     await bot.wait_until_ready()
     while not bot.is_closed():
-        if bot.config.heartbeat_url is not None:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(bot.config.heartbeat_url) as resp:
-                    if resp.status != 200:
-                        logging.warning(f"Heartbeat failed with status {resp.status}")
+        try:
+            if bot.config.heartbeat_url is not None:
+                async with aiohttp.ClientSession() as session:
+                    async with session.post(bot.config.heartbeat_url) as resp:
+                        if resp.status != 200:
+                            logging.warning(f"Heartbeat failed with status {resp.status}")
 
-        await asyncio.sleep(30)
+            await asyncio.sleep(30)
+        except Exception as e:
+            traceback.print_exc()
+            logging.error(f"Heartbeat failed with exception: {e}")
+            await asyncio.sleep(30)
 
 
 @bot.listen('on_ready')
