@@ -245,7 +245,7 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(kick_members=True)
     @app_commands.guild_only()
     async def kick(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
-        interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]
 
         converter: commands.MemberConverter = commands.MemberConverter()
@@ -293,7 +293,7 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(ban_members=True)
     @app_commands.guild_only()
     async def ban(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
-        interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
         if delete_message_time is not None:
             try:
@@ -339,7 +339,7 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(ban_members=True)
     @app_commands.guild_only()
     async def unban(self, interaction: discord.Interaction, users: str, reason: str = None):
-        interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
+        await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         users = [user.strip() for user in users.split(',')]
 
         converter: commands.MemberConverter = commands.MemberConverter()
