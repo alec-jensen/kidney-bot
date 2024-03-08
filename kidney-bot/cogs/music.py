@@ -112,7 +112,7 @@ class Music(commands.Cog):
         voice.source.volume = 0.5
 
     @app_commands.command(name='play', description='Play a song')
-    @app_commands.checks.cooldown(10, 1, key=lambda i: i.user.id) # RESET TO 1, 10
+    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id) # RESET TO 1, 10
     @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, *, song: str):
         if not interaction.user.voice:
