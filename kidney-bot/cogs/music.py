@@ -20,9 +20,7 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot: KidneyBot = bot
 
-        self.song_queue = {}
-
-        self.title_queue = {}
+        self.song_queue: dict[int, list[pafy.pafy.Pafy]] = {}
 
         self.stale_channels: dict[int, int] = {}
 
@@ -97,22 +95,18 @@ class Music(commands.Cog):
             return None
         return [entry["webpage_url"] for entry in info["entries"]] if get_url else info
 
-    async def play_song(self, interaction: discord.Interaction, song):
+    async def play_song(self, interaction: discord.Interaction, song: pafy.pafy.Pafy):
         voice: discord.VoiceProtocol = interaction.guild.voice_client
         if not voice or not voice.channel:
             await interaction.user.voice.channel.connect()
             voice = interaction.guild.voice_client
-        logging.info(f"Getting url for {song}")
-        # url = pafy.new(song).getbestaudio().url # TODO: BLOCKING!!!
-        url = await self.bot.loop.run_in_executor(None, lambda: pafy.new(song).getbestaudio().url)
-        logging.info(f"Playing {url}")
+        url = song.getworstaudio().url
         voice.play(discord.FFmpegPCMAudio(url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"),
                    after=lambda e: self.bot.loop.create_task(self.check_queue(interaction)))
-        logging.info(f"Playing {song} in {voice.channel}")
         voice.source.volume = 0.5
 
     @app_commands.command(name='play', description='Play a song')
-    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id) # RESET TO 1, 10
+    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
     @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, *, song: str):
         if not interaction.user.voice:
@@ -131,15 +125,16 @@ class Music(commands.Cog):
                 await interaction.edit_original_response(content="I couldn't find that song!")
                 return
             song = result[0]
-            print(song)
+
+        psong = await self.bot.loop.run_in_executor(None, lambda: pafy.new(song))
+
         if voice.is_playing():
-            queue_len = len(self.song_queue[interaction.guild.id])
-            self.song_queue[interaction.guild.id].append(song)
+            self.song_queue[interaction.guild.id].append(psong)
             await interaction.edit_original_response(
-                content=f"I am currently playing a song, {song} has been added to the queue at position: {queue_len + 1}.")
+                content=f"I am currently playing a song, {song} has been added to the queue at position: {len(self.song_queue)}.")
         else:
             self.song_queue[interaction.guild.id] = []
-            await self.play_song(interaction, song)
+            await self.play_song(interaction, psong)
             await interaction.edit_original_response(content=f"Now playing: {song}")
 
     @app_commands.command(name='leave', description='Have the bot leave the current voice channel.')
@@ -212,9 +207,8 @@ class Music(commands.Cog):
             return await interaction.followup.send("There are currently no songs in the queue.", ephemeral=True)
         embed = discord.Embed(
             title="Song Queue", description="\u200b", colour=discord.Colour.blue())
-        for i, url in enumerate(self.song_queue[interaction.guild.id]):
-            song = await self.bot.loop.run_in_executor(None, lambda: pafy.new(url))
-            embed.description += f"{i+1}) [{song.title}]({url})\n"
+        for i, song in enumerate(self.song_queue[interaction.guild.id]):
+            embed.description += f"{i+1}) [{song.title}](https://www.youtube.com/watch?v={song.videoid})\n"
         embed.set_footer(text=interaction.user,
                          icon_url=interaction.user.avatar.url)
         await interaction.followup.send(embed=embed)
