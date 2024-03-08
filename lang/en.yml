@@ -13,9 +13,9 @@ main:
 
   # %cog% is the name of the cog
   loaded_cog: "Loaded cog %cog%."
-  couldnt_load_cog: "Couldn't load cog %cog%. Please check console for errors."
+  couldnt_load_cog: "Couldn't load cog %cog%. %error%"
   unloaded_cog: "Unloaded cog %cog%."
-  couldnt_unload_cog: "Couldn't unload cog %cog%. Please check console for errors."
+  couldnt_unload_cog: "Couldn't unload cog %cog%. %error%"
   
   reloaded_cog: "Reloaded cog %cog%."
 

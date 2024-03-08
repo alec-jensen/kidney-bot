@@ -172,12 +172,17 @@ async def testLog(ctx, actiontype, action, reason, user: discord.User):
 async def load(ctx, extension: str):
     """Load a cog."""
     try:
-        os.rename(f'cogs/-{extension}.py', f'cogs/{extension}.py')
+        if extension.startswith('-'):
+            extension = extension[1:]
+        cwd = os.path.join(os.getcwd(), 'kidney-bot')
+        os.rename(os.path.join(cwd, 'cogs', f'-{extension}.py'), os.path.join(cwd, 'cogs', f'{extension}.py'))
         await bot.load_extension(f'cogs.{extension}')
         await ctx.reply(bot.get_lang_string("main.loaded_cog").replace("%cog%", extension))
         logging.info(f'{extension.capitalize()} cog loaded.')
     except Exception as e:
-        await ctx.reply(bot.get_lang_string("main.couldnt_load_cog").replace("%cog%", extension))
+        await ctx.reply(bot.get_lang_string("main.couldnt_load_cog")
+                        .replace("%cog%", extension)
+                        .replace("%error%", str(e)))
 
 
 @bot.command()
@@ -186,11 +191,14 @@ async def unload(ctx, extension: str):
     """Unload a cog."""
     try:
         await bot.unload_extension(f'cogs.{extension}')
-        os.rename(f'cogs/{extension}.py', f'cogs/-{extension}.py')
+        cwd = os.path.join(os.getcwd(), 'kidney-bot')
+        os.rename(os.path.join(cwd, 'cogs', f'{extension}.py'), os.path.join(cwd, 'cogs', f'-{extension}.py'))
         await ctx.reply(bot.get_lang_string("main.unloaded_cog").replace("%cog%", extension))
         logging.info(f'{extension.capitalize()} cog unloaded.')
     except Exception as e:
-        await ctx.reply(bot.get_lang_string("main.couldnt_unload_cog").replace("%cog%", extension))
+        await ctx.reply(bot.get_lang_string("main.couldnt_unload_cog")
+                        .replace("%cog%", extension)
+                        .replace("%error%", str(e)))
 
 
 @bot.command()
