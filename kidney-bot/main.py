@@ -208,13 +208,17 @@ async def reload(ctx, extension: str):
     try:
         await bot.unload_extension(f'cogs.{extension}')
     except Exception as e:
-        await ctx.reply(f'Could not unload cog {extension}\n`{e}`')
+        await ctx.reply(bot.get_lang_string("main.couldnt_unload_cog")
+                        .replace("%cog%", extension)
+                        .replace("%error%", str(e)))
         return
 
     try:
         await bot.load_extension(f'cogs.{extension}')
     except Exception as e:
-        await ctx.reply(f'Could not load cog {extension}\n`{e}`')
+        await ctx.reply(bot.get_lang_string("main.couldnt_load_cog")
+                        .replace("%cog%", extension)
+                        .replace("%error%", str(e)))
         return
 
     await ctx.reply(bot.get_lang_string("main.reloaded_cog").replace("%cog%", extension))

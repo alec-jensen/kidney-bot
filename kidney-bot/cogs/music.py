@@ -20,7 +20,9 @@ class Music(commands.Cog):
     def __init__(self, bot):
         self.bot: KidneyBot = bot
 
-        self.queue = {}
+        self.song_queue = {}
+
+        self.title_queue = {}
 
         self.stale_channels: dict[int, int] = {}
 
@@ -77,10 +79,10 @@ class Music(commands.Cog):
 
     async def check_queue(self, interaction: discord.Interaction):
         try:
-            if len(self.queue[interaction.guild.id]) > 0:
+            if len(self.song_queue[interaction.guild.id]) > 0:
                 interaction.guild.voice_client.stop()
-                await self.play_song(interaction, self.queue[interaction.guild.id][0])
-                self.queue[interaction.guild.id].pop(0)
+                await self.play_song(interaction, self.song_queue[interaction.guild.id][0])
+                self.song_queue[interaction.guild.id].pop(0)
         except:
             pass
 
@@ -100,14 +102,17 @@ class Music(commands.Cog):
         if not voice or not voice.channel:
             await interaction.user.voice.channel.connect()
             voice = interaction.guild.voice_client
-        url = pafy.new(song).getbestaudio().url
+        logging.info(f"Getting url for {song}")
+        # url = pafy.new(song).getbestaudio().url # TODO: BLOCKING!!!
+        url = await self.bot.loop.run_in_executor(None, lambda: pafy.new(song).getbestaudio().url)
         logging.info(f"Playing {url}")
         voice.play(discord.FFmpegPCMAudio(url, before_options="-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"),
                    after=lambda e: self.bot.loop.create_task(self.check_queue(interaction)))
+        logging.info(f"Playing {song} in {voice.channel}")
         voice.source.volume = 0.5
 
     @app_commands.command(name='play', description='Play a song')
-    @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
+    @app_commands.checks.cooldown(10, 1, key=lambda i: i.user.id) # RESET TO 1, 10
     @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, *, song: str):
         if not interaction.user.voice:
@@ -126,13 +131,14 @@ class Music(commands.Cog):
                 await interaction.edit_original_response(content="I couldn't find that song!")
                 return
             song = result[0]
+            print(song)
         if voice.is_playing():
-            queue_len = len(self.queue[interaction.guild.id])
-            self.queue[interaction.guild.id].append(song)
+            queue_len = len(self.song_queue[interaction.guild.id])
+            self.song_queue[interaction.guild.id].append(song)
             await interaction.edit_original_response(
                 content=f"I am currently playing a song, {song} has been added to the queue at position: {queue_len + 1}.")
         else:
-            self.queue[interaction.guild.id] = []
+            self.song_queue[interaction.guild.id] = []
             await self.play_song(interaction, song)
             await interaction.edit_original_response(content=f"Now playing: {song}")
 
@@ -145,7 +151,7 @@ class Music(commands.Cog):
             self.bot.voice_clients, guild=interaction.guild)
         if voice.is_connected():
             try:
-                del self.queue[interaction.guild.id]
+                del self.song_queue[interaction.guild.id]
             except KeyError:
                 pass
             await voice.disconnect()
@@ -187,7 +193,7 @@ class Music(commands.Cog):
         voice = interaction.guild.voice_client
         voice.stop()
         try:
-            del self.queue[interaction.guild.id]
+            del self.song_queue[interaction.guild.id]
         except KeyError:
             pass
         await interaction.response.send_message('Stopped.', ephemeral=True)
@@ -195,21 +201,23 @@ class Music(commands.Cog):
     @app_commands.command(name='queue', description='See the songs in the queue')
     @app_commands.guild_only()
     async def queue(self, interaction: discord.Interaction):
+        await interaction.response.defer()
         if not await self.basic_checks(interaction):
             return
         try:
-            self.queue[interaction.guild.id]
+            self.song_queue[interaction.guild.id]
         except:
-            self.queue[interaction.guild.id] = []
-        if len(self.queue[interaction.guild.id]) == 0:
-            return await interaction.response.send_message("There are currently no songs in the queue.", ephemeral=True)
+            self.song_queue[interaction.guild.id] = []
+        if len(self.song_queue[interaction.guild.id]) == 0:
+            return await interaction.followup.send("There are currently no songs in the queue.", ephemeral=True)
         embed = discord.Embed(
             title="Song Queue", description="\u200b", colour=discord.Colour.blue())
-        for i, url in enumerate(self.queue[interaction.guild.id]):
-            embed.description += f"{i+1}) [{pafy.new(url).title}]({url})\n"
+        for i, url in enumerate(self.song_queue[interaction.guild.id]):
+            song = await self.bot.loop.run_in_executor(None, lambda: pafy.new(url))
+            embed.description += f"{i+1}) [{song.title}]({url})\n"
         embed.set_footer(text=interaction.user,
                          icon_url=interaction.user.avatar.url)
-        await interaction.response.send_message(embed=embed)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name='skip', description='Skip the current song')
     @app_commands.guild_only()
@@ -278,7 +286,7 @@ class Music(commands.Cog):
         if not await self.basic_checks(interaction):
             return
         try:
-            self.queue[interaction.guild.id].pop(index - 1)
+            self.song_queue[interaction.guild.id].pop(index - 1)
             await interaction.response.send_message("Removed song.")
         except IndexError:
             await interaction.response.send_message("Index is out of range!", ephemeral=True)
