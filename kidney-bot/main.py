@@ -47,23 +47,27 @@ bot: KidneyBot = KidneyBot(
     intents=discord.Intents.all()
 )
 
-statuses: list[discord.Game | discord.Streaming] = [discord.Game("with the fate of the world"), discord.Game("minecraft"), discord.Game("with <users> users"),
-                                discord.Streaming(
-                                    name="<servers> servers", url="https://kidneybot.alecj.tk"), discord.Game("/rockpaperscissors"),
-                                discord.Game("counting to infinity... twice"), discord.Game("attempting to break the sound barrier... of silence")]
+statuses: list[discord.Game | discord.Streaming] = [discord.Game("with the fate of the world"),
+                                                    discord.Game("minecraft"), discord.Game("with <users> users"),
+                                                    discord.Streaming(
+                                                        name="<servers> servers", url="https://kidneybot.alecj.tk"),
+                                                    discord.Game("/rockpaperscissors"),
+                                                    discord.Game("counting to infinity... twice"),
+                                                    discord.Game("attempting to break the sound barrier... of silence")]
 
 previous_statuses: list[discord.Game | discord.Streaming] = []
+
 
 async def status():
     await bot.wait_until_ready()
     while not bot.is_closed():
-        current_status: discord.Game = random.choice(statuses) # type: ignore
+        current_status: discord.Game = random.choice(statuses)  # type: ignore
         while current_status in previous_statuses:
-            current_status = random.choice(statuses) # type: ignore
+            current_status = random.choice(statuses)  # type: ignore
 
         previous_statuses.append(current_status)
 
-        current_status.name = current_status.name.replace("<users>", str(len(bot.users)))\
+        current_status.name = current_status.name.replace("<users>", str(len(bot.users))) \
             .replace("<servers>", str(len(bot.guilds)))
         await bot.change_presence(activity=current_status)
 
@@ -75,11 +79,11 @@ async def status():
 
 async def user_count():
     await bot.wait_until_ready()
-    channel = bot.get_channel(bot.config.user_count_channel_id) # type: ignore
+    channel = bot.get_channel(bot.config.user_count_channel_id)  # type: ignore
     if channel is None:
         logging.warning("User count channel not found, not counting users.")
         return
-    
+
     while not bot.is_closed():
         assert not isinstance(channel, discord.abc.PrivateChannel)
         await channel.edit(name=f"Total Users: {len(bot.users)}")
@@ -98,7 +102,7 @@ async def heartbeat():
         except Exception as e:
             logging.error(f"Heartbeat failed with exception {e}")
             logging.error(traceback.format_exc())
-        
+
         await asyncio.sleep(30)
 
 
@@ -147,11 +151,12 @@ async def on_guild_join(guild: discord.Guild):
             setup_channel = guild.owner.dm_channel
 
     embed = discord.Embed(title="Thanks for adding me!",
-                            description=f"Thanks for adding me to **{guild}**!\n\nTo get started, run `/setup` in a channel where I can send messages.",
-                            color=discord.Color.blurple())
-    
+                          description=f"Thanks for adding me to **{guild}**!\n\nTo get started, run `/setup` in a channel where I can send messages.",
+                          color=discord.Color.blurple())
+
     if setup_channel is not None:
         await setup_channel.send(guild.owner.mention, embed=embed)
+
 
 # secret thelorbster43e mode
 @bot.listen('on_message')
@@ -339,14 +344,16 @@ async def reloadconfig(ctx):
 
     await ctx.reply(bot.get_lang_string("main.reloaded_config"))
 
+
 @bot.command()
 @is_bot_owner()
 async def clearcache(ctx):
     """Clear the bot's cache."""
     for collection in bot.database.collections:
         await collection.cache.clear()
-        
+
     await ctx.reply("Cache cleared.")
+
 
 @bot.command()
 @is_bot_owner()
@@ -363,7 +370,7 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
                     **Members:** {guild.member_count}
                     **Non-bot members:** {len([m for m in guild.members if not m.bot])}
                     **Bots:** {len([m for m in guild.members if m.bot])}""")
-    
+
     possible_issues = []
 
     if not guild.me.guild_permissions.administrator:
@@ -375,13 +382,14 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
     def _role_is_moderator(role: discord.Role) -> bool:
         return role.permissions.administrator or role.permissions.manage_guild or role.permissions.manage_channels \
             or role.permissions.manage_roles or role.permissions.manage_messages or role.permissions.ban_members or \
-                role.permissions.kick_members or role.permissions.manage_nicknames or role.permissions.manage_webhooks
+            role.permissions.kick_members or role.permissions.manage_nicknames or role.permissions.manage_webhooks
 
     for role in guild.roles:
         if not _role_is_moderator(role):
             if role.position > top_role.position:
-                possible_issues.append(f"Bot's role ({top_role.mention}) is below a normal member role ({role.mention}).")
-                
+                possible_issues.append(
+                    f"Bot's role ({top_role.mention}) is below a normal member role ({role.mention}).")
+
     highest_member_role = None
     doc = await bot.database.autorolesettings.find_one(Schemas.AutoRoleSettings(guild.id))
     autorole_roles = []
@@ -404,7 +412,8 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
         for role in guild.roles:
             if _role_is_moderator(role):
                 if role.position < highest_member_role.position:
-                    possible_issues.append(f"Moderation role ({role.mention}) is below a member role ({highest_member_role.mention}).")
+                    possible_issues.append(
+                        f"Moderation role ({role.mention}) is below a member role ({highest_member_role.mention}).")
 
     # TODO: check database for issues
 
@@ -417,13 +426,15 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
 
     await message.edit(content="", embed=embed)
 
+
 status_task: asyncio.Task | None = None
 user_count_task: asyncio.Task | None = None
 heartbeat_task: asyncio.Task | None = None
 
+
 async def main():
     global status_task, user_count_task, heartbeat_task, cache_cleanup_task
-    
+
     async with bot:
         for filename in os.listdir(os.path.join(os.path.dirname(__file__), "cogs")):
             if filename.endswith('.py'):
@@ -449,6 +460,7 @@ async def main():
             logging.warning("No heartbeat URL set, not sending heartbeats.")
 
         await bot.start(bot.config.token)
+
 
 if __name__ == '__main__':
     try:
