@@ -45,8 +45,11 @@ class SetupView(discord.ui.View):
         bot: KidneyBot = interaction.client
         embed = discord.Embed(title='AI Detection', color=discord.Color.blue())
         embed.add_field(
-            name='AI Detection', value='AI Detection is a feature that detects toxicity in messages and takes action if the toxicity is above a certain threshold.')
-        embed.add_field(name='Default Thresholds', value='Toxicity: 80%\nSevere Toxicity: 80%\nInsult: 80%\nProfanity: 80%\nIdentity Attack: 80%\nThreat: 80%\nFlirtation: 80%\nObscene: 80%\nSpam: 80%\n*These thresholds are the confidence level that the AI detects the message as the category.*')
+            name='AI Detection', value='AI Detection is a feature that detects toxicity in messages and takes action if the toxicity is above a \
+                certain threshold.')
+        embed.add_field(name='Default Thresholds', value="Toxicity: 70%\nSevere Toxicity: 70%\nInsult: 70%\nProfanity: 70%\nIdentity Attack: 70%\n\
+                        Threat: 70%\nFlirtation: 70%\nObscene: 70%\nSpam: 70%\n*These thresholds are the confidence level that the \
+                        AI detects the message as the category.*")
         embed.add_field(name='Enable AI Detection', value='Would you like to enable AI Detection?')
         view = Confirm(accept_response='AI Detection enabled.', deny_response='AI Detection will not be enabled.')
         view.interaction_check = check_user(interaction.user)
@@ -55,15 +58,15 @@ class SetupView(discord.ui.View):
         if view.value is True:
             update = {
                 '$set': {'enabled': True,
-                    'TOXICITY': 80,
-                    'SEVERE_TOXICITY': 80,
-                    'INSULT': 80,
-                    'PROFANITY': 80,
-                    'IDENTITY_ATTACK': 80,
-                    'THREAT': 80,
-                    'FLIRTATION': 80,
-                    'OBSCENE': 80,
-                    'SPAM': 80
+                    'TOXICITY': 70,
+                    'SEVERE_TOXICITY': 70,
+                    'INSULT': 70,
+                    'PROFANITY': 70,
+                    'IDENTITY_ATTACK': 70,
+                    'THREAT': 70,
+                    'FLIRTATION': 70,
+                    'OBSCENE': 70,
+                    'SPAM': 70
                 }
             }
             await bot.database.ai_detection.update_one(Schemas.AiDetection(guild=interaction.guild.id),
