@@ -5,11 +5,12 @@
 import discord
 from discord.ext import commands
 import asyncio
+import logging
+from typing import Optional
 
 from utils.config import Config
 from utils.database import Database, Schemas
-
-import logging
+import utils.types as types
 
 def get_prefix(bot: 'KidneyBot', message: discord.Message) -> list[str]:
     return commands.when_mentioned_or(bot.config.prefix)(bot, message)
@@ -19,7 +20,7 @@ class KidneyBot(commands.Bot):
     """The main bot class. This is a subclass of commands.Bot, and is used to
     store the database connection, config, and other useful things."""
 
-    instance: 'KidneyBot' or None = None
+    instance: 'KidneyBot | None' = None
 
     def __init__(self, intents):
         self.config: Config = Config()
@@ -41,7 +42,7 @@ class KidneyBot(commands.Bot):
         self.add_view(active_guard.ReportView())
 
     """Add currency to a user's wallet or bank."""
-    async def add_currency(self, user: discord.User, value: int, location: str) -> None:
+    async def add_currency(self, user: types.AnyUser, value: int, location: str) -> None:
         doc: Schemas.Currency = await self.database.currency.find_one({"userID": str(user.id)}, Schemas.Currency)
         if doc is not None:
             if location == 'wallet':
@@ -66,8 +67,9 @@ class KidneyBot(commands.Bot):
             await self.database.currency.insert_one(document)
 
     """Log an action to the configured log channel for a guild."""
-    async def log(self, guild: discord.Guild, actiontype: str, action: str, reason: str, user: discord.User,
-                  target: discord.User = None, message: discord.Message = None, color: discord.Color = None) -> discord.Message:
+    async def log(self, guild: discord.Guild, actiontype: str, action: str, reason: str, user: types.AnyUser,
+                  target: Optional[types.AnyUser] = None, message: Optional[discord.Message] = None,
+                  color: Optional[discord.Color] = None) -> Optional[discord.Message]:
         doc = await self.database.automodsettings.find_one({'guild': guild.id})
         if doc is None:
             return

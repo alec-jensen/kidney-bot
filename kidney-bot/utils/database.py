@@ -162,11 +162,11 @@ class Schemas:
     # For whatever reason, all of these are strings
     class Currency(BaseSchema):
         def __init__(self, userID: str | None = None, wallet: str | None = None,
-                     bank: str | None = None, inventory: list | None = None) -> None:
+                     bank: str | None = None, inventory: dict | None = None) -> None:
             self.userID: str | None = convert_except_none(userID, str)
             self.wallet: str | None = convert_except_none(wallet, str)
             self.bank: str | None = convert_except_none(bank, str)
-            self.inventory: list | None = inventory
+            self.inventory: dict | None = inventory
 
         @classmethod
         def from_dict(cls, data: dict) -> 'Schemas.Currency':
@@ -368,6 +368,32 @@ class Schemas:
                 'ephemeral_moderation_messages': self.ephemeral_moderation_messages,
                 'ephemeral_setting_overpowers_user_setting': self.ephemeral_setting_overpowers_user_setting
             })
+        
+    class WarnSchema(BaseSchema):
+        """dict: {
+            reason: str,
+            timestamp: int,
+            moderator: int,
+            id: str
+        }"""
+        def __init__(self, user_id: int | None = None, guild_id: int | None = None, warns: list[dict] | None = None) -> None:
+            self.user_id: int | None = convert_except_none(user_id, int)
+            self.guild_id: int | None = convert_except_none(guild_id, int)
+            self.warns: list[dict] | None = warns
+
+        @classmethod
+        def from_dict(cls, data: dict) -> 'Schemas.WarnSchema':
+            if data is None:
+                return cls()
+
+            return cls(data.get('user_id'), data.get('guild_id'), data.get('warns'))
+        
+        def to_dict(self) -> dict:
+            return remove_none_values({
+                'user_id': self.user_id,
+                'guild_id': self.guild_id,
+                'warns': self.warns
+            })
 
 
 class Collection:
@@ -470,7 +496,7 @@ class Database:
 
         logging.info(f'Connecting to database.')
         self.client: motor.motor_asyncio.AsyncIOMotorClient = motor.motor_asyncio.AsyncIOMotorClient(
-            self.dbstring, serverSelectionTimeoutMS=1000)  # TODO: change to 5000
+            self.dbstring, serverSelectionTimeoutMS=5000)
 
         try:
             await self.client.server_info()
@@ -509,6 +535,9 @@ class Database:
 
         self.guild_config = Collection(
             self, self.database.guild_config, Schemas.GuildConfig)
+        
+        self.warnings = Collection(self, self.database.warnings, Schemas.WarnSchema)
 
         self.collections = [self.active_guard_settings, self.ai_detection, self.automodsettings, self.currency, self.reports,
-                            self.scammer_list, self.serverbans, self.autorolesettings, self.exceptions, self.user_config, self.guild_config]
+                            self.scammer_list, self.serverbans, self.autorolesettings, self.exceptions, self.user_config, self.guild_config,
+                            self.warnings]

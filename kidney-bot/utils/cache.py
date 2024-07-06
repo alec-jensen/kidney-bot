@@ -1,6 +1,9 @@
 import asyncio
 import time
 import logging
+import sys
+
+from utils.misc import humanbytes
 
 class Cache:
     def __init__(self, ttl: int = 60, cleanup_interval: int | None = None):
@@ -44,9 +47,6 @@ class Cache:
 
     async def get_one(self, query):
         for item in self._storage:
-            if item['time_created'] + self._ttl < time.time():
-                continue
-
             for key, value in query.items():
                 if item['value'][key] != value:
                     break
@@ -62,9 +62,6 @@ class Cache:
         results = []
 
         for item in self._storage:
-            if item['time_created'] + self._ttl < time.time():
-                continue
-
             for key, value in query.items():
                 if item['value'][key] != value:
                     break
@@ -82,9 +79,6 @@ class Cache:
         count = 0
 
         for item in self._storage:
-            if item['time_created'] + self._ttl < time.time():
-                continue
-
             for key, value in query.items():
                 if item['value'][key] != value:
                     break
@@ -129,14 +123,17 @@ class Cache:
     async def _cleanup(self):
         self._last_cleanup = time.time()
 
-        start_size = len(self._storage)
+        start_len = len(self._storage)
+        start_size = sys.getsizeof(self._storage)
 
         self._storage = [item for item in self._storage if time.time() - item['time_created'] <= self._ttl]
 
-        end_size = len(self._storage)
+        end_len = len(self._storage)
+        end_size = sys.getsizeof(self._storage)
 
-        if start_size - end_size > 0:
-            logging.info(f'Cache cleanup complete. Removed {start_size - end_size} items. Took {time.time() - self._last_cleanup} seconds.')
+        if start_len - end_len > 0:
+            logging.info(f'Cache cleanup complete. Removed {start_len - end_len} items ({
+                humanbytes(start_size-end_size)}). Took {time.time() - self._last_cleanup} seconds.')
 
     async def cleanup_task(self):
         """
@@ -145,6 +142,9 @@ class Cache:
         while True:
             if time.time() - self._last_cleanup >= self._cleanup_interval:
                 await self._cleanup()
+            elif sys.getsizeof(self._storage) > 1024 * 1024 * 1024: # 1 GB
+                await self.clear()
+                logging.info('Cache cleared due to size limit.')
             
             time_until_next_cleanup = self._cleanup_interval - (time.time() - self._last_cleanup)
             await asyncio.sleep(time_until_next_cleanup)

@@ -14,6 +14,7 @@ from bill import insult
 import wikipedia
 from faker import Faker
 from faker.providers import internet, company, phone_number, passport, ssn
+from typing import Optional
 
 
 class Fun(commands.Cog):
@@ -25,20 +26,25 @@ class Fun(commands.Cog):
             ['W', 'D', 'L'],
             ['L', 'W', 'D'],
         ]
+        self.eightball_responses = ['indeed', 'undoubtedly', 'no', 'dunno', 'indecisive', 'idk', 'go away',
+                                    'yes', 'nope', 'maybe', 'probably', 'probably not', "don't count on it", 'ask again later', "yesn't"]
+        
 
     @commands.Cog.listener()
     async def on_ready(self):
         logging.info('Fun cog loaded.')
 
     @app_commands.command(name="yomama", description="get a yo mama joke")
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def yomama(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
-            async with cs.get('https://api.yomomma.info/') as r:
+            async with cs.get('https://www.yomama-jokes.com/api/v1/jokes/random/') as r:
                 res = await r.json()  # returns dict
                 await interaction.followup.send(res["joke"])
 
     @app_commands.command(name="dadjoke", description="get dad joked")
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def dadjoke(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -47,6 +53,7 @@ class Fun(commands.Cog):
                 await interaction.followup.send(res["joke"])
 
     @app_commands.command(name="dog", description="dog pic")
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def dog(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -55,6 +62,7 @@ class Fun(commands.Cog):
                 await interaction.followup.send(res["message"])
 
     @app_commands.command(name="duck", description="get a duck pic")
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def duck(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -63,6 +71,7 @@ class Fun(commands.Cog):
                 await interaction.followup.send(res["url"])
 
     @app_commands.command(name="cat", description='cat pic')
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def cat(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -71,6 +80,7 @@ class Fun(commands.Cog):
                 await interaction.followup.send(f"https://cataas.com/cat/{res['_id']}")
 
     @app_commands.command(name="meme", description="🤣")
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def meme(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -79,6 +89,7 @@ class Fun(commands.Cog):
                 await interaction.followup.send(res["url"])
 
     @app_commands.command(name="joke", description="its just a joke??")
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def joke(self, interaction: discord.Interaction):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -87,10 +98,12 @@ class Fun(commands.Cog):
                 await interaction.followup.send(res['joke'])
 
     @app_commands.command(name='8ball', description='get advice on anything')
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def _8ball(self, interaction: discord.Interaction, question: str):
-        responses = ['indeed', 'undoubtedly', 'no', 'dunno', 'indecisive', 'idk', 'go away',
-                     'yes', 'nope', 'maybe', 'probably', 'probably not', "don't count on it", 'ask again later', "yesn't"]
-        await interaction.response.send_message(f'> {question}\n:8ball: {random.choice(responses)}')
+        temp = self.eightball_responses.pop(0)
+        random.shuffle(self.eightball_responses)
+        self.eightball_responses.append(temp)
+        await interaction.response.send_message(f'> {question}\n:8ball: {temp}')
 
     @app_commands.command(name='rps', description='play rps for a chance to win beans')
     async def rps(self, interaction: discord.Interaction):
@@ -122,6 +135,7 @@ class Fun(commands.Cog):
             await message.reply('Draw!')
 
     @app_commands.command(name='fight_under_this_flag', description='fight under this flag meme')
+    @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
     async def fight_under_this_flag(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
         await interaction.response.defer()
@@ -146,8 +160,10 @@ class Fun(commands.Cog):
         await interaction.followup.send(file=discord.File(await a.fight_under_this_flag(), filename='fight_under_this_flag.png'))
 
     @app_commands.command(name='uwu_discord', description='uwu discord meme')
+    @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
-    async def uwu_discord(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
+    async def uwu_discord(self, interaction: discord.Interaction, user: Optional[discord.Member] = None,
+                          flag: Optional[discord.Attachment] = None, flag_url: Optional[str] = None):
         await interaction.response.defer()
         if user is None and flag is None and flag_url is None:
             image = interaction.user.avatar.url
@@ -165,8 +181,10 @@ class Fun(commands.Cog):
         await interaction.followup.send(file=discord.File(await a.uwu_discord(), filename='uwu_discord.png'))
 
     @app_commands.command(name='rip', description='rip meme')
+    @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
-    async def rip(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
+    async def rip(self, interaction: discord.Interaction, user: Optional[discord.Member] = None,
+                          flag: Optional[discord.Attachment] = None, flag_url: Optional[str] = None):
         await interaction.response.defer()
         if user is None and flag is None and flag_url is None:
             image = interaction.user.avatar.url
@@ -184,6 +202,7 @@ class Fun(commands.Cog):
         await interaction.followup.send(file=discord.File(await a.rip(), filename='rip.png'))
 
     @app_commands.command(name='synonym', description='get a synonym')
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def synonym(self, interaction: discord.Interaction, word: str):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -198,6 +217,7 @@ class Fun(commands.Cog):
                 await interaction.followup.send(f"Synonyms for {word}:\n{', '.join(words)}")
 
     @app_commands.command(name='antonym', description='get an antonym')
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def antonym(self, interaction: discord.Interaction, word: str):
         await interaction.response.defer()
         async with aiohttp.ClientSession() as cs:
@@ -212,35 +232,38 @@ class Fun(commands.Cog):
                 await interaction.followup.send(f"Antonyms for {word}:\n{', '.join(words)}")
 
     @app_commands.command(name='shakespearean-insult', description='get a shakespearean insult')
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def shakespearean_insult(self, interaction: discord.Interaction):
         await interaction.response.send_message(insult())
 
-    @app_commands.command(name='wikipedia', description='get a wikipedia article')
-    @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
+    @app_commands.command(name='wikipedia', description='get a wikipedia article. its kinda bad at searching')
+    @app_commands.allowed_installs(guilds=True, users=True)
+    @app_commands.checks.cooldown(10, 5, key=lambda i: i.user.id)
     async def wikipedia(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
-        try:
+
+        async def search(query):
             page: wikipedia.WikipediaPage = await asyncio.to_thread(wikipedia.page, title=query)
             text = page.summary[:1000]
             if len(page.summary) > 1000:
                 text += '...'
-
-            embed = discord.Embed(title=page.title, description=text, url=page.url)
-            embed.set_image(url=page.images[0])
-            embed.set_footer(text=f"Requested by {interaction.user.name}", icon_url=interaction.user.avatar.url)
-            await interaction.followup.send(embed=embed)
+            return page, text
+        
+        try:
+            page, text = await search(query)
         except wikipedia.exceptions.DisambiguationError as e:
-            options = []
-            for i in e.options:
-                if len(options) < 10:
-                    options.append(i)
-                else:
-                    break
-            await interaction.followup.send(f"Could not determine what you meant, please be more specific. Here are some options:\n{', '.join(options)}", ephemeral=True)
+            page, text = await search(e.options[0])
         except wikipedia.exceptions.PageError:
             await interaction.followup.send("Could not find that page.", ephemeral=True)
+            return
+        
+        embed = discord.Embed(title=page.title, description=text, url=page.url)
+        embed.set_image(url=page.images[0])
+        embed.set_footer(text=f"Requested by {interaction.user.name}", icon_url=interaction.user.display_avatar.url)
+        await interaction.followup.send(embed=embed)
 
     @app_commands.command(name="fake-info", description="get fake info")
+    @app_commands.allowed_installs(guilds=True, users=True)
     async def fake_info(self, interaction: discord.Interaction):
         fake = Faker(use_weighting=False)
         fake.add_provider(internet)

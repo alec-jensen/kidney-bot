@@ -105,7 +105,7 @@ class Music(commands.Cog):
                    after=lambda e: self.bot.loop.create_task(self.check_queue(interaction)))
         voice.source.volume = 0.5
 
-    @app_commands.command(name='play', description='Play a song')
+    @app_commands.command(name='play', description='Play a song (BUGGY; MAY NOT WORK FOR SOME QUERIES)')
     @app_commands.checks.cooldown(1, 10, key=lambda i: i.user.id)
     @app_commands.guild_only()
     async def play(self, interaction: discord.Interaction, *, song: str):
@@ -224,7 +224,7 @@ class Music(commands.Cog):
             await interaction.response.send_message('Skipping.')
         else:
             poll = discord.Embed(title=f"Vote to Skip Song by {interaction.user.name}#{interaction.user.discriminator}",
-                                 description="**<50% of the voice channel must vote to skip for it to pass.**",
+                                 description="**>50% of the voice channel must vote to skip for it to pass.**",
                                  colour=discord.Colour.blue())
             poll.add_field(name="Skip", value=":white_check_mark:")
             poll.add_field(name="Stay", value=":no_entry_sign:")
