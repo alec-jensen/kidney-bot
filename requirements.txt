@@ -57,3 +57,4 @@ youtube-dl @ git+https://github.com/ytdl-org/youtube-dl.git@be008e657d79832642e2
 regex~=2023.12.25
 humanfriendly~=10.0
 pyyaml~=6.0.1
+zipp>=3.19.1 # not directly required, pinned by Snyk to avoid a vulnerability
