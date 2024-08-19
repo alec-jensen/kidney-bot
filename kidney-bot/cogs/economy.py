@@ -205,11 +205,13 @@ class UserProfile:
 
     async def inventory(self) -> dict:
         doc = await self.database.currency.find_one({'userID': str(self.user.id)})
+        if type(doc.get('inventory')) is not dict:
+            doc['inventory'] = {}
         return doc['inventory']
     
     async def add_item(self, item: Item):
         doc = await self.database.currency.find_one({'userID': str(self.user.id)})
-        if type(doc['inventory']) is not dict:
+        if type(doc.get('inventory')) is not dict:
             doc['inventory'] = {}
         count = doc['inventory'].get(item.id, 0)
         count += 1
