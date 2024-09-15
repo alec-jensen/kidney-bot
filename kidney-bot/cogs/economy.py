@@ -235,6 +235,8 @@ class UserProfile:
         if location not in ['wallet', 'bank']:
             raise ValueError(
                 f"Parameter \"location\" must be 'wallet' or 'bank' got: {location}")
+        
+        logging.info(f'Adding {amount} beans to {self.user.display_name}\'s {location}')
         await self.bot.add_currency(self.user, amount, location)
 
 
@@ -480,6 +482,10 @@ you got {amount} beans!")
         if int(await profile.wallet()) < amount:
             await interaction.followup.send('You don\'t have enough beans!', ephemeral=True)
             return
+        elif interaction.user.id == target.id:
+            await interaction.followup.send('You can\'t pay yourself!', ephemeral=True)
+            return
+        
         await profile.add_currency(-amount, 'wallet')
         await target_profile.add_currency(amount, 'wallet')
         await interaction.followup.send(f'You paid {amount} beans to {target.mention}')

@@ -43,7 +43,7 @@ class KidneyBot(commands.Bot):
 
     """Add currency to a user's wallet or bank."""
     async def add_currency(self, user: types.AnyUser, value: int, location: str) -> None:
-        doc: Schemas.Currency = await self.database.currency.find_one({"userID": str(user.id)}, Schemas.Currency)
+        doc: Optional[Schemas.Currency] = await self.database.currency.find_one({"userID": str(user.id)}, Schemas.Currency)
         if doc is not None:
             if location == 'wallet':
                 await self.database.currency.update_one({'userID': str(user.id)},
