@@ -11,6 +11,6 @@
     "perspective_api_key": "",
     "error_channel": "",
     "prefix": "kb.",
-    "langfile": "lang/en_us.yml",
+    "langfile": "lang/en.yml",
     "heartbeat_url": ""
 }

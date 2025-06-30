@@ -25,9 +25,6 @@ time_start = time.perf_counter_ns()
 # Logging configuration
 
 now = datetime.datetime.now()
-if not os.path.exists("logs"):
-    os.makedirs("logs")
-
 logFormatter = LogFormatter()
 rootLogger = logging.getLogger()
 rootLogger.setLevel(logging.INFO)
@@ -36,12 +33,23 @@ consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)
 rootLogger.addHandler(consoleHandler)
 
-logFileFormatter = LogFileFormatter()
-fileHandler = logging.FileHandler(
-    f"logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.log"
-)
-fileHandler.setFormatter(logFileFormatter)
-rootLogger.addHandler(fileHandler)
+# Try to set up file logging with proper error handling
+try:
+    if not os.path.exists("logs"):
+        os.makedirs("logs")
+    
+    logFileFormatter = LogFileFormatter()
+    log_filename = f"logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.log"
+    fileHandler = logging.FileHandler(log_filename)
+    fileHandler.setFormatter(logFileFormatter)
+    rootLogger.addHandler(fileHandler)
+    print(f"Logging to file: {log_filename}")
+except PermissionError as e:
+    print(f"Warning: Could not create log file due to permission error: {e}")
+    print("Continuing with console logging only...")
+except Exception as e:
+    print(f"Warning: Could not set up file logging: {e}")
+    print("Continuing with console logging only...")
 
 bot: KidneyBot = KidneyBot(intents=discord.Intents.all())
 
