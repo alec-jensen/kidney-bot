@@ -3,5 +3,28 @@ name = "kidney-bot"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = []
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.12.13",
+    "bill>=0.0.1",
+    "discord-py[voice]>=2.5.2",
+    "dnspython>=2.7.0",
+    "faker>=37.4.0",
+    "humanfriendly>=10.0",
+    "humanize>=4.12.3",
+    "pafy",
+    "pilcord",
+    "psutil>=7.0.0",
+    "pymongo>=4.13.2",
+    "pyyaml>=6.0.2",
+    "regex>=2024.11.6",
+    "requests>=2.32.4",
+    "shakespeare-insult>=1.0.3",
+    "toml>=0.10.2",
+    "wikipedia>=1.4.0",
+    "youtube-dl>=2021.12.17",
+]
+
+[tool.uv.sources]
+pafy = { git = "https://github.com/alec-jensen/pafy.git", rev = "541dbc978dcf5e0e518317937164a9e5a8f8ab53" }
+pilcord = { git = "https://github.com/alec-jensen/pilcord.git", rev = "8dcb7631824625e7020456e8394decfc3fbf1217" }

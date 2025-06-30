@@ -24,10 +24,11 @@ class Confirm(discord.ui.View):
         
         for child in self.children:
             if child != button:
-                child.disabled = True
+                child.disabled = True # type: ignore
 
         try:
-            await interaction.message.edit(view=self)
+            if interaction.message is not None:
+                await interaction.message.edit(view=self)
         except discord.NotFound:
             pass
 
@@ -44,10 +45,11 @@ class Confirm(discord.ui.View):
 
         for child in self.children:
             if child != button:
-                child.disabled = True
+                child.disabled = True # type: ignore
 
         try:
-            await interaction.message.edit(view=self)
+            if interaction.message is not None:
+                await interaction.message.edit(view=self)
         except discord.NotFound:
             pass
 

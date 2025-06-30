@@ -10,7 +10,7 @@ import random
 import aiohttp
 import logging
 import pilcord
-from bill import insult
+from bill import insult # shakespeare-insult
 import wikipedia
 from faker import Faker
 from faker.providers import internet, company, phone_number, passport, ssn
@@ -137,7 +137,7 @@ class Fun(commands.Cog):
     @app_commands.command(name='fight_under_this_flag', description='fight under this flag meme')
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
-    async def fight_under_this_flag(self, interaction: discord.Interaction, user: discord.Member = None, flag: discord.Attachment = None, flag_url: str = None):
+    async def fight_under_this_flag(self, interaction: discord.Interaction, user: discord.Member | None = None, flag: discord.Attachment | None = None, flag_url: str | None = None):
         await interaction.response.defer()
         # Count how many arguments are not None
         num_arguments = sum(arg is not None for arg in [user, flag, flag_url])
@@ -147,14 +147,20 @@ class Fun(commands.Cog):
             await interaction.followup.send('You must provide exactly one of the arguments: user, flag, or flag_url.', ephemeral=True)
             return
 
-        if user is None and flag is None and flag_url is None:
+        image = None
+
+        if user is None and flag is None and flag_url is None and interaction.user.avatar is not None:
             image = interaction.user.avatar.url
-        if user is not None:
+        if user is not None and user.avatar is not None:
             image = user.avatar.url
         if flag is not None:
             image = flag.url
         if flag_url is not None:
             image = flag_url
+
+        if image is None:
+            await interaction.followup.send('No valid image provided. Please provide a user, flag, or flag_url.', ephemeral=True)
+            return
         
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.fight_under_this_flag(), filename='fight_under_this_flag.png'))
@@ -165,9 +171,9 @@ class Fun(commands.Cog):
     async def uwu_discord(self, interaction: discord.Interaction, user: Optional[discord.Member] = None,
                           flag: Optional[discord.Attachment] = None, flag_url: Optional[str] = None):
         await interaction.response.defer()
-        if user is None and flag is None and flag_url is None:
+        if user is None and flag is None and flag_url is None and interaction.user.avatar is not None:
             image = interaction.user.avatar.url
-        elif user is not None and flag is None and flag_url is None:
+        elif user is not None and flag is None and flag_url is None and user.avatar is not None:
             image = user.avatar.url
         elif user is None and flag is not None and flag_url is None:
             image = flag.url
@@ -186,9 +192,9 @@ class Fun(commands.Cog):
     async def rip(self, interaction: discord.Interaction, user: Optional[discord.Member] = None,
                           flag: Optional[discord.Attachment] = None, flag_url: Optional[str] = None):
         await interaction.response.defer()
-        if user is None and flag is None and flag_url is None:
+        if user is None and flag is None and flag_url is None and interaction.user.avatar is not None:
             image = interaction.user.avatar.url
-        elif user is not None and flag is None and flag_url is None:
+        elif user is not None and flag is None and flag_url is None and user.avatar is not None:
             image = user.avatar.url
         elif user is None and flag is not None and flag_url is None:
             image = flag.url

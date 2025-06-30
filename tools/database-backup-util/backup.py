@@ -16,6 +16,11 @@ import traceback
 import datetime
 import os
 
+ALERT_URL = None
+
+now = datetime.datetime.now()
+fileNameFormat = f'{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}'
+
 try:
     dir = os.path.realpath(os.path.dirname(__file__))
     if not os.path.exists(f'{dir}/backup'):
@@ -24,8 +29,6 @@ try:
         os.makedirs(f'{dir}/logs')
     with open(f'{dir}/post-alert-url.txt', 'r') as f:
         ALERT_URL = f.read()
-    now = datetime.datetime.now()
-    fileNameFormat = f'{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}'
 
     logFormatter = logging.Formatter("[%(asctime)s] [%(levelname)8s] --- %(message)s (%(name)s - %(filename)s:%(lineno)s)", '%H:%M:%S')
     rootLogger = logging.getLogger()
@@ -54,10 +57,11 @@ try:
                 json.dump(json_util.dumps(r), f)
 
     logging.info(f'Database backed up successfully! {os.path.join(dir, "backup", fileNameFormat)}')
-    try:
-        requests.post(ALERT_URL, data=f'DATABASE BACKUP SUCCESS. Log saved as {fileNameFormat}.txt!')
-    except:
-        pass
+    if ALERT_URL is not None and ALERT_URL != "":
+        try:
+            requests.post(ALERT_URL, data=f'DATABASE BACKUP SUCCESS. Log saved as {fileNameFormat}.txt!')
+        except:
+            pass
 
 except Exception as e:
     tb = traceback.format_exception(type(e), e, e.__traceback__)
@@ -68,7 +72,8 @@ except Exception as e:
         else:
             formattedTB = f'{formattedTB}{i}'
     logging.error(formattedTB)
-    try:
-        requests.post(ALERT_URL, data=f'DATABASE BACKUP FAILED. Log saved as {fileNameFormat}.txt!')
-    except:
-        pass
+    if ALERT_URL is not None and ALERT_URL != "":
+        try:
+            requests.post(ALERT_URL, data=f'DATABASE BACKUP FAILED. Log saved as {fileNameFormat}.txt!')
+        except:
+            pass

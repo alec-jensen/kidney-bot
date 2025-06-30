@@ -34,17 +34,32 @@ class Config:
             self.conf_json: dict = json.load(f)
 
         try:
+            # Token is required
             self.token: str = self.conf_json['token']
+            if self.token is None or self.token == "" or self.token == "SET ME!!":
+                raise ValueError('Bot token must be set in config.json')
+                
+            # Database string is required
             self.dbstring: str = self.conf_json['dbstring']
+            if self.dbstring is None or self.dbstring == "" or self.dbstring == "SET ME!!":
+                raise ValueError('Database string must be set in config.json')
+            
+            # Owner ID is required
+            ownerid = self.conf_json['ownerid']
+            if ownerid is None or ownerid == "" or ownerid == "SET ME!!":
+                raise ValueError('Owner ID must be set in config.json')
 
-            if type(self.conf_json.get('ownerid')) == list:
-                self.owner_id = None
-                self.owner_ids = set([convert_except_none(
-                    i, int) for i in self.conf_json.get('ownerid', []) if i is not None])
+            if type(ownerid) == list:
+                self.owner_id: int | None = None
+                self.owner_ids: set[int] | None = set([convert_except_none(
+                    i, int) for i in ownerid if i is not None])
+                if not self.owner_ids:
+                    raise ValueError('At least one valid owner ID must be provided')
             else:
-                self.owner_id = convert_except_none(
-                    self.conf_json.get('ownerid'), int)
-                self.owner_ids = None
+                self.owner_id: int | None = convert_except_none(ownerid, int)
+                if self.owner_id is None:
+                    raise ValueError('Owner ID must be a valid integer')
+                self.owner_ids: set[int] | None = None
 
             self.report_channel: int | None = convert_except_none(
                 self.conf_json.get('report_channel'), int, error=False)
@@ -83,7 +98,7 @@ class Config:
                 raise FileNotFoundError(
                     f'Language file {self.langfile} does not exist.')
 
-            self.heartbeat_url: str = self.conf_json.get('heartbeat_url', None)
+            self.heartbeat_url: str | None = self.conf_json.get('heartbeat_url', None)
             if self.heartbeat_url == '':
                 self.heartbeat_url = None
 
@@ -105,3 +120,21 @@ class Config:
                 'Database string changed, please restart kidney-bot.')
 
         self.load()
+
+    def get_primary_owner_id(self) -> int:
+        """Get the primary owner ID. If multiple owners, returns the first one."""
+        if self.owner_id is not None:
+            return self.owner_id
+        elif self.owner_ids is not None and len(self.owner_ids) > 0:
+            return next(iter(self.owner_ids))
+        else:
+            raise RuntimeError("No valid owner ID configured")
+
+    def is_owner(self, user_id: int) -> bool:
+        """Check if a user ID is an owner."""
+        if self.owner_id is not None:
+            return user_id == self.owner_id
+        elif self.owner_ids is not None:
+            return user_id in self.owner_ids
+        else:
+            return False

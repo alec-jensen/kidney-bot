@@ -5,6 +5,6 @@ services:
         image: kidneybot
         volumes:
             - ./logs:/app/logs
-            - ./config.json:/app/config.json
+            - ./config.json:/app/config.json:ro
             - ./database-backups:/app/utils/database-backup-util/backup
         restart: unless-stopped

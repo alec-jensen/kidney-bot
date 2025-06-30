@@ -15,7 +15,7 @@ from utils.database import Schemas
 from utils import checks
 from utils.views import Confirm
 
-def check_user(user: discord.User):
+def check_user(user: discord.User | discord.Member):
     async def predicate(interaction: discord.Interaction):
         return interaction.user == user
     return predicate
@@ -28,7 +28,7 @@ class SetupView(discord.ui.View):
 
     @discord.ui.button(label='Set up Active Guard', style=discord.ButtonStyle.blurple)
     async def active_guard(self, interaction: discord.Interaction, button: discord.ui.Button):
-        bot: KidneyBot = interaction.client
+        bot: KidneyBot = interaction.client  # type: ignore
         embed = discord.Embed(title='Active Guard', color=discord.Color.blue())
         embed.add_field(
             name='Active Guard', value='Active Guard is a feature that blocks known bot accounts from joining your server.')
@@ -37,12 +37,12 @@ class SetupView(discord.ui.View):
         view.interaction_check = check_user(interaction.user)
         await interaction.response.send_message(embed=embed, view=view)
         await view.wait()
-        if view.value is True:
+        if view.value is True and interaction.guild:
             await bot.database.active_guard_settings.update_one(Schemas.ActiveGuardSettings(guild_id=interaction.guild.id), {'$set': {'block_known_spammers': True}}, upsert=True)
 
     @discord.ui.button(label='Set up AI Detection', style=discord.ButtonStyle.blurple)
     async def ai_detection(self, interaction: discord.Interaction, button: discord.ui.Button):
-        bot: KidneyBot = interaction.client
+        bot: KidneyBot = interaction.client  # type: ignore
         embed = discord.Embed(title='AI Detection', color=discord.Color.blue())
         embed.add_field(
             name='AI Detection', value='AI Detection is a feature that detects toxicity in messages and takes action if the toxicity is above a \
@@ -55,7 +55,7 @@ class SetupView(discord.ui.View):
         view.interaction_check = check_user(interaction.user)
         await interaction.response.send_message(embed=embed, view=view)
         await view.wait()
-        if view.value is True:
+        if view.value is True and interaction.guild:
             update = {
                 '$set': {'enabled': True,
                     'TOXICITY': 70,
@@ -74,7 +74,7 @@ class SetupView(discord.ui.View):
 
     @discord.ui.button(label='Set up Permission Timeout', style=discord.ButtonStyle.blurple)
     async def permission_timeout(self, interaction: discord.Interaction, button: discord.ui.Button):
-        bot: KidneyBot = interaction.client
+        bot: KidneyBot = interaction.client  # type: ignore
         embed = discord.Embed(title='Permission Timeout', color=discord.Color.blue())
         embed.add_field(
             name='Permission Timeout', value='Permission Timeout is a feature that ensures users have been a member of your server for a certain amount of time before they can use moderation permissions. Users can be whitelisted from this feature by the server owner.')
@@ -84,12 +84,12 @@ class SetupView(discord.ui.View):
         view.interaction_check = check_user(interaction.user)
         await interaction.response.send_message(embed=embed, view=view)
         await view.wait()
-        if view.value is True:
+        if view.value is True and interaction.guild:
             await bot.database.automodsettings.update_one(Schemas.AutoModSettings(guild=interaction.guild.id), {'$set': {'permissions_timeout': 604800}}, upsert=True)
 
     @discord.ui.button(label='Set up Auto Role', style=discord.ButtonStyle.blurple)
     async def auto_role(self, interaction: discord.Interaction, button: discord.ui.Button):
-        bot: KidneyBot = interaction.client
+        bot: KidneyBot = interaction.client  # type: ignore
         embed = discord.Embed(title='Auto Role', color=discord.Color.blue())
         embed.add_field(
             name='Auto Role', value='Auto Role is a feature that automatically gives roles to users when they join.')
@@ -100,7 +100,7 @@ class SetupView(discord.ui.View):
         roleSelect = discord.ui.RoleSelect(placeholder='Please select the roles you would like to be automatically given to new members.', min_values=1, max_values=25)
         
         async def callback(interaction: discord.Interaction):
-            view.interaction = interaction
+            setattr(view, 'interaction', interaction)  # type: ignore
             view.stop()
 
         roleSelect.callback = callback
@@ -109,47 +109,51 @@ class SetupView(discord.ui.View):
         await interaction.response.send_message(embed=embed, view=view)
         await view.wait()
 
-        if len(view.children[0].values) == 0:
+        if not hasattr(view.children[0], 'values') or len(view.children[0].values) == 0:  # type: ignore
             return
         
         roles = []
-        for role in view.children[0].values:
+        for role in view.children[0].values:  # type: ignore
             roles.append({'id': role.id, 'delay': 0})
 
         msg = "Would you like bots to get roles?"
         view2 = Confirm(accept_response='Bots will get roles.', deny_response='Bots will not get roles.')
         view2.interaction_check = check_user(interaction.user)
-        if view.interaction is not None:
-            await view.interaction.response.send_message(msg, view=view2)
+        if hasattr(view, 'interaction') and view.interaction is not None:  # type: ignore
+            await view.interaction.response.send_message(msg, view=view2)  # type: ignore
         else:
-            await interaction.channel.send(msg, view=view2)
+            if interaction.channel and hasattr(interaction.channel, 'send'):
+                await interaction.channel.send(msg, view=view2)  # type: ignore
+
         await view2.wait()
 
-        await bot.database.autorolesettings.update_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), {'$set': {'roles': roles, 'BotsGetRoles': view2.value}}, upsert=True)
+        if interaction.guild:
+            await bot.database.autorolesettings.update_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), {'$set': {'roles': roles, 'BotsGetRoles': view2.value}}, upsert=True)
 
     @discord.ui.button(label='Set up Moderation', style=discord.ButtonStyle.blurple)
     async def moderation(self, interaction: discord.Interaction, button: discord.ui.Button):
-        bot: KidneyBot = interaction.client
+        bot: KidneyBot = interaction.client  # type: ignore
         embed = discord.Embed(title='Moderation', color=discord.Color.blue())
         embed.add_field(name="Ephemeral Messages", value="Would you like to enable ephemeral messages for moderation command outputs?")
         view = Confirm(accept_response='Ephemeral messages enabled.', deny_response='Ephemeral messages will not be enabled.')
         view.interaction_check = check_user(interaction.user)
         await interaction.response.send_message(embed=embed, view=view)
         await view.wait()
-        if view.value is True:
+        if view.value is True and interaction.guild:
             await bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_moderation_messages": True}}, upsert=True)
-        elif view.value is False:
-            await bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.user.id), {"$set": {"ephemeral_moderation_messages": False}}, upsert=True)
+        elif view.value is False and interaction.guild:
+            await bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_moderation_messages": False}}, upsert=True)
 
         embed = discord.Embed(title='Force Guild Ephemeral Setting', color=discord.Color.blue())
         embed.add_field(name="Force Guild Ephemeral Setting", value="Would you like to force all moderation command outputs to use the guild's ephemeral setting?")
         view = Confirm(accept_response='Force guild ephemeral setting enabled.', deny_response='Force guild ephemeral setting will not be enabled.')
         view.interaction_check = check_user(interaction.user)
-        await interaction.channel.send(embed=embed, view=view)
+        if interaction.channel and hasattr(interaction.channel, 'send'):
+            await interaction.channel.send(embed=embed, view=view)  # type: ignore
         await view.wait()
-        if view.value is True:
+        if view.value is True and interaction.guild:
             await bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_setting_overpowers_user_setting": True}}, upsert=True)
-        elif view.value is False:
+        elif view.value is False and interaction.guild:
             await bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_setting_overpowers_user_setting": False}}, upsert=True)
 
 
@@ -195,75 +199,92 @@ class Other(commands.Cog):
     @app_commands.command(name='guild_settings_overview', description='See all settings for the current guild')
     @app_commands.default_permissions(administrator=True)
     async def guild_settings_overview(self, interaction: discord.Interaction):
-        embed = discord.Embed(
-            title='Guild Settings Overview', color=discord.Color.blue())
-        doc: Schemas.ActiveGuardSettings = await self.bot.database.active_guard_settings.find_one(Schemas.ActiveGuardSettings(guild_id=interaction.guild.id), Schemas.ActiveGuardSettings)
-        if doc is not None:
-            embed.add_field(name='Active Guard', value=f'Block known spammers: {
-                            doc.block_known_spammers}')
+        if not interaction.guild:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+            
+        embed = discord.Embed(title='Guild Settings Overview', color=discord.Color.blue())
+        
+        doc_result = await self.bot.database.active_guard_settings.find_one(Schemas.ActiveGuardSettings(guild_id=interaction.guild.id), Schemas.ActiveGuardSettings)
+        if doc_result and isinstance(doc_result, dict):
+            doc = doc_result.get('block_known_spammers', False)
+            embed.add_field(name='Active Guard', value=f'Block known spammers: {doc}')
 
-        doc1: Schemas.AiDetection = await self.bot.database.ai_detection.find_one(Schemas.AiDetection(guild=interaction.guild.id), Schemas.AiDetection)
-        if doc1 is not None:
-            embed.add_field(name='AI Detection', value=f'Enabled: {doc1.enabled}\nToxicity Threshold: {doc1.TOXICITY}\
-            \nSevere Toxicity Threshold: {doc1.SEVERE_TOXICITY}\nInsult Threshold: {doc1.INSULT}\nProfanity Threshold: {doc1.PROFANITY}\
-            \nIdentity Attack Threshold: {doc1.IDENTITY_ATTACK}\nThreat Threshold: {doc1.THREAT}\nFlirtation Threshold: {doc1.FLIRTATION}\
-            \nObscene Threshold: {doc1.OBSCENE}\nSpam Threshold: {doc1.SPAM}')
+        doc1_result = await self.bot.database.ai_detection.find_one(Schemas.AiDetection(guild=interaction.guild.id), Schemas.AiDetection)
+        if doc1_result and isinstance(doc1_result, dict):
+            enabled = doc1_result.get('enabled', False)
+            toxicity = doc1_result.get('TOXICITY', 70)
+            severe_toxicity = doc1_result.get('SEVERE_TOXICITY', 70)
+            insult = doc1_result.get('INSULT', 70)
+            profanity = doc1_result.get('PROFANITY', 70)
+            identity_attack = doc1_result.get('IDENTITY_ATTACK', 70)
+            threat = doc1_result.get('THREAT', 70)
+            flirtation = doc1_result.get('FLIRTATION', 70)
+            obscene = doc1_result.get('OBSCENE', 70)
+            spam = doc1_result.get('SPAM', 70)
+            
+            embed.add_field(name='AI Detection', value=f'Enabled: {enabled}\nToxicity Threshold: {toxicity}\
+            \nSevere Toxicity Threshold: {severe_toxicity}\nInsult Threshold: {insult}\nProfanity Threshold: {profanity}\
+            \nIdentity Attack Threshold: {identity_attack}\nThreat Threshold: {threat}\nFlirtation Threshold: {flirtation}\
+            \nObscene Threshold: {obscene}\nSpam Threshold: {spam}')
 
-        doc2: Schemas.AutoModSettings = await self.bot.database.automodsettings.find_one(Schemas.AutoModSettings(guild=interaction.guild.id), Schemas.AutoModSettings)
-        if doc2 is not None:
+        doc2_result = await self.bot.database.automodsettings.find_one(Schemas.AutoModSettings(guild=interaction.guild.id), Schemas.AutoModSettings)
+        if doc2_result and isinstance(doc2_result, dict):
             whitelist = []
-
-            if interaction.guild is None:
-                return
-
-            for user_or_channel in getattr(doc2, 'whitelist', []):
-                if interaction.guild.get_member(user_or_channel) is not None:
-                    whitelist.append(interaction.guild.get_member(
-                        user_or_channel).mention)
-                elif interaction.guild.get_channel(user_or_channel) is not None:
-                    whitelist.append(interaction.guild.get_channel(
-                        user_or_channel).mention)
+            for user_or_channel in doc2_result.get('whitelist', []):
+                member = interaction.guild.get_member(user_or_channel)
+                channel = interaction.guild.get_channel(user_or_channel)
+                if member:
+                    whitelist.append(member.mention)
+                elif channel:
+                    whitelist.append(channel.mention)
                 else:
-                    whitelist.append(user_or_channel)
+                    whitelist.append(str(user_or_channel))
 
             permissions_timeout_whitelist = []
-            for user in getattr(doc2, 'permissions_timeout_whitelist', []):
-                if interaction.guild.get_member(user) is not None:
-                    permissions_timeout_whitelist.append(
-                        interaction.guild.get_member(user).mention)
+            for user in doc2_result.get('permissions_timeout_whitelist', []):
+                member = interaction.guild.get_member(user)
+                if member:
+                    permissions_timeout_whitelist.append(member.mention)
                 else:
-                    permissions_timeout_whitelist.append(user)
+                    permissions_timeout_whitelist.append(str(user))
 
             permissions_timeout = None
-            if doc2.permissions_timeout is not None:
-                permissions_timeout = format_timespan(doc2.permissions_timeout)
+            timeout_val = doc2_result.get('permissions_timeout')
+            if timeout_val is not None:
+                permissions_timeout = format_timespan(timeout_val)
 
-            embed.add_field(name='Auto Mod', value=f'Log Channel: {None if doc2.log_channel is None else
-                                                                   getattr(interaction.guild.get_channel(doc2.log_channel),
-                                                                           "mention", None)}\
+            log_channel_id = doc2_result.get('log_channel')
+            log_channel_mention = None
+            if log_channel_id:
+                log_channel = interaction.guild.get_channel(log_channel_id)
+                if log_channel:
+                    log_channel_mention = log_channel.mention
+
+            embed.add_field(name='Auto Mod', value=f'Log Channel: {log_channel_mention}\
                             \nWhitelist: {", ".join(whitelist)}\nPermissions Timeout: {permissions_timeout}\
                             \nPermissions Timeout Whitelist: {", ".join(permissions_timeout_whitelist)}')
 
-        doc3: Schemas.AutoRoleSettings = await self.bot.database.autorolesettings.find_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), Schemas.AutoRoleSettings)
-        if doc3 is not None:
+        doc3_result = await self.bot.database.autorolesettings.find_one(Schemas.AutoRoleSettings(guild=interaction.guild.id), Schemas.AutoRoleSettings)
+        if doc3_result and isinstance(doc3_result, dict):
             roles = []
-            role: dict
-            for role in getattr(doc3, 'roles', []):
-                _role = interaction.guild.get_role(role[id])
-                if _role is None:
-                    continue
+            for role_data in doc3_result.get('roles', []):
+                if isinstance(role_data, dict):
+                    role_id = role_data.get('id')
+                    if role_id:
+                        _role = interaction.guild.get_role(role_id)
+                        if _role:
+                            _str = _role.mention
+                            delay = role_data.get('delay', 0)
+                            try:
+                                if int(delay) > 0:
+                                    _str += f' (Delay: {delay})'
+                            except (ValueError, TypeError):
+                                pass
+                            roles.append(_str)
 
-                _str = _role.mention
-                try:
-                    if int(role.get('delay', 0)) > 0:
-                        _str += f' (Delay: {role.get("delay")})'
-                except ValueError:
-                    pass
-
-                roles.append(_str)
-
-            embed.add_field(name='Auto Role', value=f'Roles: {
-                            ", ".join(roles)}\nBots get roles: {doc3.bots_get_roles}')
+            bots_get_roles = doc3_result.get('bots_get_roles', False)
+            embed.add_field(name='Auto Role', value=f'Roles: {", ".join(roles)}\nBots get roles: {bots_get_roles}')
 
         await interaction.response.send_message(embed=embed, ephemeral=True)
 

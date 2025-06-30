@@ -8,7 +8,7 @@ from discord import app_commands
 from datetime import timedelta
 import humanize
 import logging
-from typing import Literal, Optional
+from typing import Literal, Optional, cast
 import asyncio
 from uuid import uuid4
 
@@ -35,7 +35,9 @@ class PageDropdown(discord.ui.Select):
         super().__init__(placeholder='Select a page...', min_values=1, max_values=1, options=options)
 
     async def callback(self, interaction: discord.Interaction):
-        view: WarningsView = self.view
+        if not self.view or not isinstance(self.view, WarningsView):
+            return
+        view = self.view
         view.page = int(self.values[0]) - 1
         await view.update()
         await interaction.response.defer()
@@ -46,17 +48,32 @@ class WarningsView(discord.ui.View):
         self.target = target
         super().__init__()
         self.page = 0
+        self.warns: list = []
+        self.num_pages = 0
+        self.message: Optional[discord.Message] = None
     
     async def async_init(self):
-        doc: Schemas.WarnSchema = await self.bot.database.warnings.find_one(Schemas.WarnSchema(self.target.id, self.target.guild.id), Schemas.WarnSchema)
+        # Only Members have guild attribute, check if target is a Member
+        if not isinstance(self.target, discord.Member):
+            self.num_pages = 0
+            self.warns = []
+            self.add_item(discord.ui.Button(label='No warnings - User not in guild', style=discord.ButtonStyle.secondary, disabled=True))
+            return
+            
+        doc = await self.bot.database.warnings.find_one(Schemas.WarnSchema(self.target.id, self.target.guild.id), Schemas.WarnSchema)
         if doc is None:
             self.num_pages = 0
             self.warns = []
             self.add_item(discord.ui.Button(label='No warnings', style=discord.ButtonStyle.secondary, disabled=True))
             return
 
-        self.num_pages = (len(doc.warns) + items_per_page - 1) // items_per_page
-        self.warns = doc.warns
+        # Handle both dict and schema access patterns
+        warns_data = doc.get('warns') if isinstance(doc, dict) else getattr(doc, 'warns', [])
+        if warns_data is None:
+            warns_data = []
+            
+        self.num_pages = (len(warns_data) + items_per_page - 1) // items_per_page
+        self.warns = warns_data
 
         self.add_item(PageDropdown(self.num_pages))
 
@@ -81,14 +98,18 @@ class WarningsView(discord.ui.View):
     async def update(self):
         next_button = discord.utils.get(self.children, label='Next')
         back_button = discord.utils.get(self.children, label='Back')
-        if self.page == 0:
-            back_button.disabled = True
-        else:
-            back_button.disabled = False
-        if self.page == self.num_pages - 1:
-            next_button.disabled = True
-        else:
-            next_button.disabled = False
+        
+        if isinstance(back_button, discord.ui.Button):
+            if self.page == 0:
+                back_button.disabled = True
+            else:
+                back_button.disabled = False
+                
+        if isinstance(next_button, discord.ui.Button):
+            if self.page == self.num_pages - 1:
+                next_button.disabled = True
+            else:
+                next_button.disabled = False
         
         embed = discord.Embed(title=f"Warnings for {self.target}", color=discord.Color.red())
         embed.add_field(name="Total warnings", value=len(self.warns), inline=False)
@@ -102,7 +123,9 @@ class WarningsView(discord.ui.View):
         if len(embed.fields) == 0:
             embed.add_field(name="No warnings", value="This user has no warnings", inline=False)
         embed.set_footer(text=f"Page {self.page + 1}/{self.num_pages}")
-        await self.message.edit(embed=embed, view=self)
+        
+        if self.message:
+            await self.message.edit(embed=embed, view=self)
 
 class Moderation(commands.Cog):
     def __init__(self, bot):
@@ -164,6 +187,10 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     @app_commands.guild_only()
     async def ephemeral_messages_guild(self, interaction: discord.Interaction, ephemeral: Literal["Yes", "No"]):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         ephemeralB = ephemeral == "Yes"
         await interaction.response.defer(ephemeral=True)
         await self.bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_moderation_messages": ephemeralB}}, upsert=True)
@@ -174,6 +201,10 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(administrator=True)
     @app_commands.guild_only()
     async def ephemeral_messages_force_guild_setting(self, interaction: discord.Interaction, force: Literal["Yes", "No"]):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         forceB = force == "Yes"
         await interaction.response.defer(ephemeral=True)
         await self.bot.database.guild_config.update_one(Schemas.GuildConfig(interaction.guild.id), {"$set": {"ephemeral_setting_overpowers_user_setting": forceB}}, upsert=True)
@@ -203,6 +234,15 @@ class Moderation(commands.Cog):
     @app_commands.guild_only()
     @app_commands.describe(user="The user to change the nickname of", newnick="The new nickname. Leave blank to reset the nickname")
     async def nickname(self, interaction: discord.Interaction, user: discord.Member, *, newnick: str | None = None):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild, interaction.user))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             await interaction.followup.send(
@@ -226,18 +266,25 @@ class Moderation(commands.Cog):
     @app_commands.command(name='purge', description="Purge messages")
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
-    async def purge(self, interaction: discord.Interaction, limit: int, user: discord.Member = None):
+    async def purge(self, interaction: discord.Interaction, limit: int, user: Optional[discord.Member] = None):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         msg = []
         if not user:
-            await interaction.channel.purge(limit=limit, before=interaction.created_at)
+            if interaction.channel and isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+                await interaction.channel.purge(limit=limit, before=interaction.created_at)
         else:
-            async for m in interaction.channel.history():
-                if len(msg) == limit:
-                    break
-                if m.author == user:
-                    msg.append(m)
-            await interaction.channel.delete_messages(msg)
+            if interaction.channel and isinstance(interaction.channel, (discord.TextChannel, discord.Thread)):
+                async for m in interaction.channel.history():
+                    if len(msg) == limit:
+                        break
+                    if m.author == user:
+                        msg.append(m)
+                if interaction.channel and hasattr(interaction.channel, 'delete_messages'):
+                    await interaction.channel.delete_messages(msg)
 
         embed = discord.Embed(title=f"Purge result",
                               description=None, color=discord.Color.green())
@@ -249,7 +296,16 @@ class Moderation(commands.Cog):
     @app_commands.command(name='mute', description="Mute users")
     @app_commands.default_permissions(mute_members=True)
     @app_commands.guild_only()
-    async def mute(self, interaction: discord.Interaction, user: discord.Member, *, reason: str = None):
+    async def mute(self, interaction: discord.Interaction, user: discord.Member, *, reason: Optional[str] = None):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             await interaction.followup.send(
@@ -257,6 +313,10 @@ class Moderation(commands.Cog):
             return
 
         role = discord.utils.get(interaction.guild.roles, name="Muted")
+        if role is None:
+            await interaction.followup.send('Muted role not found. Please create a "Muted" role.', ephemeral=True)
+            return
+            
         await user.add_roles(role, reason=f'by {interaction.user} for {reason}')
         embed = discord.Embed(title=f"Mute result",
                               description=None, color=discord.Color.red())
@@ -270,6 +330,15 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(mute_members=True)
     @app_commands.guild_only()
     async def unmute(self, interaction: discord.Interaction, user: discord.Member):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             await interaction.followup.send(
@@ -292,7 +361,16 @@ class Moderation(commands.Cog):
     @app_commands.command(name='tempmute', description="Timeout users")
     @app_commands.default_permissions(mute_members=True)
     @app_commands.guild_only()
-    async def tempmute(self, interaction: discord.Interaction, user: discord.Member, time: str, *, reason: str = None):
+    async def tempmute(self, interaction: discord.Interaction, user: discord.Member, time: str, *, reason: Optional[str] = None):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             await interaction.followup.send(
@@ -323,47 +401,66 @@ class Moderation(commands.Cog):
     @app_commands.describe(delete_message_time="The time to delete messages from the user. Can be up to 7 days.")
     @app_commands.default_permissions(kick_members=True)
     @app_commands.guild_only()
-    async def kick(self, interaction: discord.Interaction, users: str, reason: str = None, delete_message_time: str = None):
+    async def kick(self, interaction: discord.Interaction, users: str, reason: Optional[str] = None, delete_message_time: Optional[str] = None):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
-        users = [user.strip() for user in users.split(',')]
+        
+        # Parse users list
+        user_list = [user.strip() for user in users.split(',')]
+        
+        # Process delete message time
+        max_delete_time = 0
+        if delete_message_time is not None:
+            try:
+                time_seconds = await self.convert_time_to_seconds(delete_message_time)
+                if time_seconds is not False:
+                    max_delete_time = int(time_seconds)
+            except:
+                await interaction.followup.send("You cannot input invalid numbers.", ephemeral=True)
+                return
 
         converter: commands.MemberConverter = commands.MemberConverter()
         ctx = await commands.Context.from_interaction(interaction)
-        for i, user in enumerate(users):
-            user = await converter.convert(ctx, user)
-            users[i] = user
-
-            if not await self.permissionHierarchyCheck(interaction.user, user):
-                await interaction.followup.send(
-                    "You cannot moderate users higher than you", ephemeral=True)
-                return
-
-            await interaction.guild.kick(user, reason=reason)
-
-        if max_delete_time is not None:
+        kicked_users: list[discord.Member] = []
+        
+        for user_str in user_list:
             try:
-                max_delete_time = await self.convert_time_to_seconds(delete_message_time)
-            except:
-                await interaction.followup.send(
-                    "You cannot input invalid numbers.", ephemeral=True)
+                user = await converter.convert(ctx, user_str)
+                if not await self.permissionHierarchyCheck(interaction.user, user):
+                    await interaction.followup.send(
+                        "You cannot moderate users higher than you", ephemeral=True)
+                    return
+
+                await interaction.guild.kick(user, reason=reason)
+                kicked_users.append(user)
+            except Exception as e:
+                await interaction.followup.send(f"Failed to kick user {user_str}: {str(e)}", ephemeral=True)
                 return
-        else:
-            max_delete_time = 0
 
-        for channel in interaction.guild.channels:
-            async for message in channel.history():
-                if message.author in users:
-                    if message.created_at > interaction.created_at - timedelta(seconds=max_delete_time):
-                        await message.delete()
+        # Delete messages if specified
+        if max_delete_time > 0:
+            for channel in interaction.guild.channels:
+                if isinstance(channel, (discord.TextChannel, discord.Thread)):
+                    try:
+                        async for message in channel.history():
+                            if message.author in kicked_users:
+                                if message.created_at > interaction.created_at - timedelta(seconds=max_delete_time):
+                                    await message.delete()
+                    except Exception:
+                        pass  # Ignore permission errors for channels
 
-
-        embed = discord.Embed(title=f"Kick result",
-                              description=None, color=discord.Color.red())
+        embed = discord.Embed(title=f"Kick result", description=None, color=discord.Color.red())
         embed.add_field(name="Reason", value=reason, inline=False)
-        embed.add_field(name="Kicked", value=', '.join(
-            [user.mention for user in users]), inline=False)
-        embed.set_footer(
-            text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
+        embed.add_field(name="Kicked", value=', '.join([user.mention for user in kicked_users]), inline=False)
+        embed.set_footer(text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
         await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='ban', description="Ban users")
@@ -372,47 +469,57 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(ban_members=True)
     @app_commands.guild_only()
     async def ban(self, interaction: discord.Interaction, users: str, reason: Optional[str] = None, delete_message_time: Optional[str] = None):
-        assert interaction.guild is not None
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
 
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
+        # Process delete message time
+        delete_message_seconds = 0
         if delete_message_time is not None:
             try:
-                delete_message_time = await self.convert_time_to_seconds(delete_message_time)
+                time_result = await self.convert_time_to_seconds(delete_message_time)
+                if time_result is not False:
+                    delete_message_seconds = int(time_result)
             except:
-                await interaction.followup.send(
-                    "You cannot input invalid numbers.", ephemeral=True)
+                await interaction.followup.send("You cannot input invalid numbers.", ephemeral=True)
                 return
-        else:
-            delete_message_time = 0
         
-        if delete_message_time > 604800:
-            await interaction.followup.send(
-                "You can only delete messages up to 7 days old", ephemeral=True)
+        if delete_message_seconds > 604800:
+            await interaction.followup.send("You can only delete messages up to 7 days old", ephemeral=True)
             return
         
-        users = [user.strip() for user in users.split(',')]
+        # Parse users list
+        user_list = [user.strip() for user in users.split(',')]
 
         converter: commands.MemberConverter = commands.MemberConverter()
         ctx = await commands.Context.from_interaction(interaction)
-        for i, user in enumerate(users):
-            user = await converter.convert(ctx, user)
-            users[i] = user
+        banned_users: list[discord.Member] = []
+        
+        for user_str in user_list:
+            try:
+                user = await converter.convert(ctx, user_str)
+                if not await self.permissionHierarchyCheck(interaction.user, user):
+                    await interaction.followup.send(
+                        "You cannot moderate users higher than you", ephemeral=True)
+                    return
 
-            if not await self.permissionHierarchyCheck(interaction.user, user):
-                await interaction.followup.send(
-                    "You cannot moderate users higher than you", ephemeral=True)
+                await interaction.guild.ban(user, reason=reason, delete_message_seconds=delete_message_seconds)
+                banned_users.append(user)
+            except Exception as e:
+                await interaction.followup.send(f"Failed to ban user {user_str}: {str(e)}", ephemeral=True)
                 return
 
-            await interaction.guild.ban(user, reason=reason, delete_message_seconds=delete_message_time)
-
-        embed = discord.Embed(title=f"Ban result",
-                              description=None, color=discord.Color.red())
+        embed = discord.Embed(title=f"Ban result", description=None, color=discord.Color.red())
         embed.add_field(name="Reason", value=reason, inline=False)
-        embed.add_field(name="Banned", value=', '.join(
-            [user.mention for user in users]), inline=False)
-        embed.set_footer(
-            text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
+        embed.add_field(name="Banned", value=', '.join([user.mention for user in banned_users]), inline=False)
+        embed.set_footer(text=f"Moderator: {interaction.user}", icon_url=interaction.user.avatar)
         await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='unban', description="Unban users")
@@ -452,6 +559,15 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
     async def warn(self, interaction: discord.Interaction, user: discord.Member, *, reason: str):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             await interaction.followup.send(
@@ -462,7 +578,11 @@ class Moderation(commands.Cog):
             Schemas.WarnSchema(user.id, interaction.guild.id), Schemas.WarnSchema)
         if doc is None:
             doc = Schemas.WarnSchema(user.id, interaction.guild.id)
-            doc.warns = []
+            # Handle both dict and schema access patterns
+            if hasattr(doc, 'warns'):
+                doc.warns = []
+            elif isinstance(doc, dict):
+                doc['warns'] = []
         
         warn_dict = {
             "reason": reason,
@@ -470,15 +590,27 @@ class Moderation(commands.Cog):
             "moderator": interaction.user.id,
             "id": str(uuid4())
         }
-        doc.warns.append(warn_dict)
-
-        await self.bot.database.warnings.update_one(Schemas.WarnSchema(user.id, interaction.guild.id),
-                                                    {"$set": doc.to_dict()}, upsert=True)
+        
+        # Safe access for both dict and schema
+        if isinstance(doc, dict):
+            warns_list = doc.get('warns', [])
+            warns_list.append(warn_dict)
+            doc['warns'] = warns_list
+            doc_dict = doc
+        else:
+            warns_list = getattr(doc, 'warns', [])
+            if warns_list is None:
+                warns_list = []
+            warns_list.append(warn_dict)
+            # For schema objects, create a new dict with updated warns
+            doc_dict = doc.to_dict() if hasattr(doc, 'to_dict') else {}
+            doc_dict['warns'] = warns_list
+        await self.bot.database.warnings.update_one(Schemas.WarnSchema(user.id, interaction.guild.id), {"$set": doc_dict}, upsert=True)
         
         dm_embed = discord.Embed(title=f"You have been warned in {interaction.guild}", color=discord.Color.red())
         dm_embed.add_field(name="Reason", value=reason, inline=False)
         dm_embed.add_field(name="Warn ID", value=warn_dict['id'], inline=False)
-        dm_embed.set_footer(text=f"This is your {ordinal(len(doc.warns))} warn")
+        dm_embed.set_footer(text=f"This is your {ordinal(len(warns_list))} warn")
 
         failed_dms = False
         try:
@@ -489,7 +621,7 @@ class Moderation(commands.Cog):
         embed = discord.Embed(title=f"Warn result", description=None, color=discord.Color.red())
         embed.add_field(name="Reason", value=reason, inline=False)
         embed.add_field(name="Warned", value=user.mention, inline=False)
-        embed.add_field(name="Moderator", value=f"{interaction.user.mention}\n\nThis is their {ordinal(len(doc.warns))} warn", inline=False)
+        embed.add_field(name="Moderator", value=f"{interaction.user.mention}\n\nThis is their {ordinal(len(warns_list))} warn", inline=False)
         if failed_dms:
             embed.add_field(name="Failed to DM user", value="User has DMs disabled", inline=False)
         embed.set_footer(text=f"Warn ID: {warn_dict['id']}")
@@ -511,32 +643,66 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
     async def warninfo(self, interaction: discord.Interaction, warn_id: str):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
-        doc = Schemas.WarnSchema.from_dict(await self.bot.database.database.warnings.find_one({"warns.id": warn_id}))
+        
+        # Find the warning by ID
+        raw_doc = await self.bot.database.database.warnings.find_one({"warns.id": warn_id})
+        if raw_doc is None:
+            await interaction.followup.send("Warn not found", ephemeral=True)
+            return
+            
+        doc = Schemas.WarnSchema.from_dict(raw_doc) if raw_doc else None
         if doc is None:
             await interaction.followup.send("This user has no warnings", ephemeral=True)
             return
 
-        for warn in doc.warns:
+        # Safe access for warns
+        warns_list = doc.get('warns') if isinstance(doc, dict) else getattr(doc, 'warns', [])
+        if warns_list is None:
+            warns_list = []
+            
+        warn_found = None
+        for warn in warns_list:
             if warn['id'] == warn_id:
+                warn_found = warn
                 break
-        else:
+                
+        if warn_found is None:
             await interaction.followup.send("Warn not found", ephemeral=True)
             return
 
-        user = await self.bot.fetch_user(doc.user_id)
+        # Safe access for user_id
+        user_id = doc.get('user_id') if isinstance(doc, dict) else getattr(doc, 'user_id', None)
+        if user_id is None:
+            await interaction.followup.send("User ID not found", ephemeral=True)
+            return
+            
+        user = await self.bot.fetch_user(user_id)
 
         embed = discord.Embed(title=f"Warn information", color=discord.Color.red())
-        embed.add_field(name="Reason", value=warn['reason'], inline=False)
+        embed.add_field(name="Reason", value=warn_found['reason'], inline=False)
         embed.add_field(name="User", value=user.mention, inline=False)
-        embed.add_field(name="Moderator", value=(await self.bot.fetch_user(warn['moderator'])).mention, inline=False)
-        embed.add_field(name="Timestamp", value=f"<t:{warn['timestamp']}>", inline=False)
+        embed.add_field(name="Moderator", value=(await self.bot.fetch_user(warn_found['moderator'])).mention, inline=False)
+        embed.add_field(name="Timestamp", value=f"<t:{warn_found['timestamp']}>", inline=False)
         await interaction.followup.send(embed=embed, ephemeral=await self.get_ephemeral_messages(interaction.guild))
 
     @app_commands.command(name='clearwarns', description="Clear all warnings for a user")
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
     async def clearwarns(self, interaction: discord.Interaction, user: discord.Member):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             await interaction.followup.send(
@@ -550,27 +716,52 @@ class Moderation(commands.Cog):
     @app_commands.default_permissions(manage_messages=True)
     @app_commands.guild_only()
     async def delwarn(self, interaction: discord.Interaction, user: discord.Member, warn_id: str):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
+        # Ensure interaction.user is a Member in guild context
+        if not isinstance(interaction.user, discord.Member):
+            await interaction.response.send_message('This command requires server member context.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=await self.get_ephemeral_messages(interaction.guild))
         if not await self.permissionHierarchyCheck(interaction.user, user):
             await interaction.followup.send(
                 "You cannot moderate users higher than you", ephemeral=True)
             return
 
-        doc: Schemas.WarnSchema = await self.bot.database.warnings.find_one(Schemas.WarnSchema(user.id, interaction.guild.id), Schemas.WarnSchema)
+        doc = await self.bot.database.warnings.find_one(Schemas.WarnSchema(user.id, interaction.guild.id), Schemas.WarnSchema)
         if doc is None:
             await interaction.followup.send("This user has no warnings", ephemeral=True)
             return
 
-        for i, warn in enumerate(doc.warns):
+        # Safe access for both dict and schema
+        warns_list = doc.get('warns') if isinstance(doc, dict) else getattr(doc, 'warns', [])
+        if warns_list is None:
+            warns_list = []
+
+        warn_found = False
+        for i, warn in enumerate(warns_list):
             if warn['id'] == warn_id:
-                del doc.warns[i]
+                del warns_list[i]
+                warn_found = True
                 break
-        else:
+                
+        if not warn_found:
             await interaction.followup.send("Warn not found", ephemeral=True)
             return
 
-        await self.bot.database.warnings.update_one(Schemas.WarnSchema(user.id, interaction.guild.id),
-                                                    {"$set": doc.to_dict()}, upsert=True)
+        # Update the document with modified warns list
+        if isinstance(doc, dict):
+            doc['warns'] = warns_list
+            doc_dict = doc
+        else:
+            # For schema objects, create a new dict with updated warns
+            doc_dict = doc.to_dict() if hasattr(doc, 'to_dict') else {}
+            doc_dict['warns'] = warns_list
+
+        await self.bot.database.warnings.update_one(Schemas.WarnSchema(user.id, interaction.guild.id), {"$set": doc_dict}, upsert=True)
 
         await interaction.followup.send("Warn deleted", ephemeral=await self.get_ephemeral_messages(interaction.guild))
 

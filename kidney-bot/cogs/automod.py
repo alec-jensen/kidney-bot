@@ -44,9 +44,9 @@ class Automod(commands.Cog):
     def __init__(self, bot):
         self.bot: KidneyBot = bot
 
-    async def ai_detect(self, content: str, guild: discord.Guild, doc: dict = None) -> dict:
+    async def ai_detect(self, content: str, guild: discord.Guild, doc: dict | object | None = None) -> dict | None:
         if self.bot.config.perspective_api_key is None:
-            return
+            return None
 
         headers = {"Content-Type": "application/json"}
         data = '{comment: {text: "' + content + \
@@ -62,26 +62,32 @@ class Automod(commands.Cog):
                     return None
 
                 if doc is None:
-                    doc = await self.bot.database.ai_detection.find_one({'guild': guild.id})
-                    if doc is None:
+                    doc_result = await self.bot.database.ai_detection.find_one({'guild': guild.id})
+                    if doc_result is None:
                         return None
+                    # Use the doc_result directly
+                    doc = doc_result
 
                 detections = {}
                 if resp_json.get('attributeScores') is None:
                     return None
                 for key, value in resp_json['attributeScores'].items():
                     # deepcode ignore AttributeLoadOnNone: this warning is incorrect
-                    if value['summaryScore']['value'] > doc.get(key, 60) / 100:
+                    # Safe access for both dict and schema
+                    threshold = doc.get(key, 60) if isinstance(doc, dict) else getattr(doc, key, 60)
+                    if value['summaryScore']['value'] > threshold / 100:
                         detections[key] = value
 
                 return detections
 
-    async def check_whitelist(self, member_or_channel: discord.Member or discord.TextChannel):
+    async def check_whitelist(self, member_or_channel: discord.Member | discord.TextChannel):
         doc = await self.bot.database.automodsettings.find_one({'guild': member_or_channel.guild.id})
         if doc is None:
             return False
 
-        return member_or_channel.id in doc.get('whitelist', [])
+        # Safe access for both dict and schema
+        whitelist = doc.get('whitelist', []) if isinstance(doc, dict) else getattr(doc, 'whitelist', [])
+        return member_or_channel.id in whitelist
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -93,15 +99,30 @@ class Automod(commands.Cog):
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message):
         try:
+            if not message.guild:
+                return
+                
             doc = await self.bot.database.ai_detection.find_one({'guild': message.guild.id})
-            if doc is None or doc.get('enabled') is False:
+            # Safe access for both dict and schema
+            enabled = doc.get('enabled') if isinstance(doc, dict) else getattr(doc, 'enabled', False) if doc else False
+            if doc is None or enabled is False:
                 return
             if message.author.bot:
                 return
         except AttributeError:
             return
 
-        if await self.check_whitelist(message.author) or await self.check_whitelist(message.channel):
+        # Check whitelist with proper type handling
+        author_whitelisted = False
+        channel_whitelisted = False
+        
+        if isinstance(message.author, discord.Member):
+            author_whitelisted = await self.check_whitelist(message.author)
+        
+        if isinstance(message.channel, discord.TextChannel):
+            channel_whitelisted = await self.check_whitelist(message.channel)
+            
+        if author_whitelisted or channel_whitelisted:
             return
 
         if self.bot.config.perspective_api_key is None:
@@ -118,21 +139,42 @@ class Automod(commands.Cog):
 
         if len(detections) > 0:
             await message.delete()
-            await message.author.send(f'Your message```{message.content}```in {message.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
-            await self.bot.log(message.guild, 'Automod', 'AI Detection (message send)', f'Message from {message.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{message.content}', user=message.guild.me, target=message.author)
+            # Safe channel mention handling
+            if isinstance(message.channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
+                channel_mention = message.channel.mention
+            else:
+                channel_mention = str(message.channel)
+            await message.author.send(f'Your message```{message.content}```in {channel_mention} was deleted due to the following AI detections:\n{detections_str}')
+            if message.guild:
+                await self.bot.log(message.guild, 'Automod', 'AI Detection (message send)', f'Message from {message.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{message.content}', user=message.guild.me, target=message.author)
 
     @commands.Cog.listener()
     async def on_message_edit(self, before: discord.Message, after: discord.Message):
         try:
+            if not after.guild:
+                return
+                
             doc = await self.bot.database.ai_detection.find_one({'guild': after.guild.id})
-            if doc is None or doc.get('enabled') is False:
+            # Safe access for both dict and schema
+            enabled = doc.get('enabled') if isinstance(doc, dict) else getattr(doc, 'enabled', False) if doc else False
+            if doc is None or enabled is False:
                 return
             if after.author.bot:
                 return
         except AttributeError:
             return
 
-        if await self.check_whitelist(after.author) or await self.check_whitelist(after.channel):
+        # Check whitelist with proper type handling
+        author_whitelisted = False
+        channel_whitelisted = False
+        
+        if isinstance(after.author, discord.Member):
+            author_whitelisted = await self.check_whitelist(after.author)
+        
+        if isinstance(after.channel, discord.TextChannel):
+            channel_whitelisted = await self.check_whitelist(after.channel)
+            
+        if author_whitelisted or channel_whitelisted:
             return
 
         if self.bot.config.perspective_api_key is None:
@@ -149,51 +191,112 @@ class Automod(commands.Cog):
 
         if len(detections) > 0:
             await after.delete()
-            await after.author.send(f'Your message```{after.content}```in {after.channel.mention} was deleted due to the following AI detections:\n{detections_str}')
-            await self.bot.log(after.guild, 'Automod', 'AI Detection (message edit)', f'Message from {after.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{after.content}', user=after.guild.me, target=after.author)
+            # Safe channel mention handling
+            if isinstance(after.channel, (discord.TextChannel, discord.Thread, discord.VoiceChannel)):
+                channel_mention = after.channel.mention
+            else:
+                channel_mention = str(after.channel)
+            await after.author.send(f'Your message```{after.content}```in {channel_mention} was deleted due to the following AI detections:\n{detections_str}')
+            if after.guild:
+                await self.bot.log(after.guild, 'Automod', 'AI Detection (message edit)', f'Message from {after.author} was deleted due to the following AI detections:\n{detections_str}\nMessage:\n{after.content}', user=after.guild.me, target=after.author)
 
     @commands.Cog.listener()
     async def on_member_update(self, before: discord.Member, after: discord.Member):
-        if after.nick is None:
-            return
-        if after.nick == before.nick:
-            return
-
-        doc = await self.bot.database.automodsettings.find_one({'guild': after.guild.id, 'whitelist': {'$in': [after.id]}})
-        if doc is not None:
-            return
-
-        try:
-            doc = await self.bot.database.ai_detection.find_one({'guild': after.guild.id})
-            if doc is None or doc.get('enabled') is False:
+        # Handle nickname changes (AI detection)
+        if after.nick is not None and after.nick != before.nick:
+            doc = await self.bot.database.automodsettings.find_one({'guild': after.guild.id, 'whitelist': {'$in': [after.id]}})
+            if doc is not None:
                 return
-            if after.bot:
+
+            try:
+                doc = await self.bot.database.ai_detection.find_one({'guild': after.guild.id})
+                # Safe access for both dict and schema
+                enabled = doc.get('enabled') if isinstance(doc, dict) else getattr(doc, 'enabled', False) if doc else False
+                if doc is None or enabled is False:
+                    return
+                if after.bot:
+                    return
+            except AttributeError:
                 return
-        except AttributeError:
-            return
 
-        if await self.check_whitelist(after):
-            return
+            if await self.check_whitelist(after):
+                return
 
-        if self.bot.config.perspective_api_key is None:
-            return
+            if self.bot.config.perspective_api_key is None:
+                return
 
-        detections = await self.ai_detect(after.nick, after.guild, doc)
-        detections_str = ''
+            detections = await self.ai_detect(after.nick, after.guild, doc)
+            detections_str = ''
 
-        if detections is None:
-            return
+            if detections is None:
+                return
 
-        for key, value in detections.items():
-            detections_str += f'{key}: {value["summaryScore"]["value"]}\n'
+            for key, value in detections.items():
+                detections_str += f'{key}: {value["summaryScore"]["value"]}\n'
 
-        if len(detections) > 0:
-            await after.edit(nick=before.nick)
-            await after.send(f'Your nickname in {after.guild.name} was reset due to the following AI detections:\n{detections_str}\nNickname:\n{after.nick}')
-            await self.bot.log(after.guild, 'Automod', 'AI Detection (nickname update)', f'Nickname of {after} was reset due to the following AI detections:\n{detections_str}\nNickname:\n{after.nick}', user=after.guild.me, target=after)
+            if len(detections) > 0:
+                await after.edit(nick=before.nick)
+                await after.send(f'Your nickname in {after.guild.name} was reset due to the following AI detections:\n{detections_str}\nNickname:\n{after.nick}')
+                await self.bot.log(after.guild, 'Automod', 'AI Detection (nickname update)', f'Nickname of {after} was reset due to the following AI detections:\n{detections_str}\nNickname:\n{after.nick}', user=after.guild.me, target=after)
+
+        # Handle role changes (permissions timeout)
+        if before.roles != after.roles:
+            doc = await self.bot.database.automodsettings.find_one({'guild': after.guild.id})
+            if doc is None:
+                return
+
+            # Safe access for both dict and schema
+            permissions_timeout = doc.get('permissions_timeout') if isinstance(doc, dict) else getattr(doc, 'permissions_timeout', None)
+            if permissions_timeout is None:
+                return
+
+            # Safe access for whitelist
+            permissions_timeout_whitelist = doc.get('permissions_timeout_whitelist', []) if isinstance(doc, dict) else getattr(doc, 'permissions_timeout_whitelist', [])
+            if after.id in permissions_timeout_whitelist:
+                return
+
+            if after == self.bot.user:
+                return
+
+            if after.joined_at is None:
+                return
+
+            if (after.joined_at.timestamp() + permissions_timeout) > discord.utils.utcnow().timestamp():
+                new_roles = [
+                    role for role in after.roles if role not in before.roles]
+
+                roles = set([])
+
+                for role in new_roles:
+                    for permission in role.permissions:
+                        if not permission[1]:
+                            continue
+
+                        if permission[0] in moderation_permissions:
+                            roles.add(role)
+
+                    for channel in after.guild.channels:
+                        for overwrite in channel.overwrites_for(role):
+                            if overwrite[1] is True:
+                                if overwrite[0] in moderation_permissions:
+                                    roles.add(role)
+
+                await after.remove_roles(*roles)
+                if len(roles) > 0:
+                    await self.bot.log(after.guild, 'Automod', 'Permissions Timeout',
+                                       f'User {after} was removed from role(s) {", ".join(
+                                           [role.mention for role in roles])} due to permissions timeout.',
+                                       user=after.guild.me, target=after)
+                    await after.send(f'In the server {after.guild.name}, you were removed from role(s) {", ".join([role.name for role in roles])} due to permissions timeout.')
 
     @commands.Cog.listener()
     async def on_audit_log_entry_create(self, entry: discord.AuditLogEntry):
+        if not entry.guild or not entry.user or not entry.target:
+            return
+        
+        if not isinstance(entry.target, discord.Member) or not isinstance(entry.user, discord.Member):
+            return
+            
         target: discord.Member = entry.target
         user: discord.Member = entry.user
         guild: discord.Guild = entry.guild
@@ -203,16 +306,23 @@ class Automod(commands.Cog):
             if doc is None:
                 return
 
-            if doc.get('permissions_timeout') is None:
+            # Safe access for both dict and schema
+            permissions_timeout = doc.get('permissions_timeout') if isinstance(doc, dict) else getattr(doc, 'permissions_timeout', None)
+            if permissions_timeout is None:
                 return
 
-            if user.id in doc.get('permissions_timeout_whitelist', []):
+            # Safe access for whitelist
+            permissions_timeout_whitelist = doc.get('permissions_timeout_whitelist', []) if isinstance(doc, dict) else getattr(doc, 'permissions_timeout_whitelist', [])
+            if user.id in permissions_timeout_whitelist:
                 return
 
             if entry.user == self.bot.user:
                 return
 
-            if (user.joined_at.timestamp() + doc.get('permissions_timeout')) > discord.utils.utcnow().timestamp():
+            if user.joined_at is None:
+                return
+
+            if (user.joined_at.timestamp() + permissions_timeout) > discord.utils.utcnow().timestamp():
                 # Find moderation permissions of user
                 user_permissions = set([])
 
@@ -263,49 +373,7 @@ class Automod(commands.Cog):
                 elif result is True:
                     await self.bot.log(guild, 'Automod', 'Permissions Timeout', f'Undone moderation action {entry.action} by {user} on {target}.', user=guild.me, target=user, color=discord.Color.green())
 
-    @commands.Cog.listener()
-    async def on_member_update(self, before: discord.Member, after: discord.Member):
-        if before.roles != after.roles:
-            doc = await self.bot.database.automodsettings.find_one({'guild': after.guild.id})
-            if doc is None:
-                return
 
-            if doc.get('permissions_timeout') is None:
-                return
-
-            if after.id in doc.get('permissions_timeout_whitelist', []):
-                return
-
-            if after == self.bot.user:
-                return
-
-            if (after.joined_at.timestamp() + doc.get('permissions_timeout')) > discord.utils.utcnow().timestamp():
-                new_roles = [
-                    role for role in after.roles if role not in before.roles]
-
-                roles = set([])
-
-                for role in new_roles:
-                    for permission in role.permissions:
-                        if not permission[1]:
-                            continue
-
-                        if permission[0] in moderation_permissions:
-                            roles.add(role)
-
-                    for channel in after.guild.channels:
-                        for overwrite in channel.overwrites_for(role):
-                            if overwrite[1] is True:
-                                if overwrite[0] in moderation_permissions:
-                                    roles.add(role)
-
-                await after.remove_roles(*roles)
-                if len(roles) > 0:
-                    await self.bot.log(after.guild, 'Automod', 'Permissions Timeout',
-                                       f'User {after} was removed from role(s) {", ".join(
-                                           [role.mention for role in roles])} due to permissions timeout.',
-                                       user=after.guild.me, target=after)
-                    await after.send(f'In the server {after.guild.name}, you were removed from role(s) {", ".join([role.name for role in roles])} due to permissions timeout.')
 
     auto_mod = app_commands.Group(name='automod', description='Manage Automod settings',
                                   default_permissions=discord.Permissions(manage_guild=True), guild_only=True)
@@ -313,7 +381,11 @@ class Automod(commands.Cog):
     @auto_mod.command(name='ai', description='Manage AI automod settings. Recommended to set to 70-80% for best results.')
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
-    async def automod(self, interaction: discord.Interaction, enabled: bool = None, option: Literal['TOXICITY', 'SEVERE_TOXICITY', 'IDENTITY_ATTACK', 'INSULT', 'PROFANITY', 'THREAT', 'FLIRTATION', 'OBSCENE', 'SPAM'] = None, value: int = None):
+    async def automod(self, interaction: discord.Interaction, enabled: bool | None = None, option: Literal['TOXICITY', 'SEVERE_TOXICITY', 'IDENTITY_ATTACK', 'INSULT', 'PROFANITY', 'THREAT', 'FLIRTATION', 'OBSCENE', 'SPAM'] | None = None, value: int | None = None):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=True)
         if enabled is not None:
             doc = await self.bot.database.ai_detection.find_one({'guild': interaction.guild.id})
@@ -338,7 +410,7 @@ class Automod(commands.Cog):
         if option is not None and value is None:
             await interaction.followup.send(f'Invalid arguments. Please provide a value.', ephemeral=True)
             return
-        if option is not None and value is not None and value < 0 or value > 100:
+        if option is not None and value is not None and (value < 0 or value > 100):
             await interaction.followup.send(f'Invalid value. Value must be between 0 and 100.', ephemeral=True)
             return
         if enabled is None and (option is None or value is None):
@@ -359,6 +431,10 @@ class Automod(commands.Cog):
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def automod_overview(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=True)
         doc = await self.bot.database.ai_detection.find_one({'guild': interaction.guild.id})
         if doc is None:
@@ -366,16 +442,31 @@ class Automod(commands.Cog):
             return
         embed = discord.Embed(title='AI Detection Overview',
                               description='AI Detection is currently enabled. The following settings are set:', color=discord.Color.green())
-        for key, value in doc.items():
-            if key == '_id' or key == 'guild':
-                continue
-            embed.add_field(name=key, value=value, inline=True)
+        
+        # Safe access for both dict and schema
+        if isinstance(doc, dict):
+            for key, value in doc.items():
+                if key == '_id' or key == 'guild':
+                    continue
+                embed.add_field(name=key, value=value, inline=True)
+        else:
+            # Handle schema object
+            for attr in dir(doc):
+                if not attr.startswith('_') and attr != 'guild':
+                    value = getattr(doc, attr, None)
+                    if value is not None:
+                        embed.add_field(name=attr, value=value, inline=True)
+        
         await interaction.followup.send(embeds=[embed], ephemeral=True)
 
     @auto_mod.command(name='log', description='Set the log channel for automod')
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     async def automod_log(self, interaction: discord.Interaction, channel: discord.TextChannel):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=True)
         if await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id}) is not None:
             await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'log_channel': channel.id}})
@@ -390,6 +481,10 @@ class Automod(commands.Cog):
     @app_commands.guild_only()
     @checks.is_guild_owner()
     async def automod_permissions_timeout(self, interaction: discord.Interaction, timeout: int):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=True)
         if await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id}) is not None:
             await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout': timeout}})
@@ -404,6 +499,10 @@ class Automod(commands.Cog):
     @app_commands.guild_only()
     @checks.is_guild_owner()
     async def permissions_timeout_whitelist(self, interaction: discord.Interaction, user: discord.Member, state: bool = True):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=True)
         doc = await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id})
         if doc is None:
@@ -411,27 +510,35 @@ class Automod(commands.Cog):
             doc = await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id})
 
         if state is True:
-            if user.id in doc.get('permissions_timeout_whitelist', []):
+            # Safe access for both dict and schema
+            whitelist = doc.get('permissions_timeout_whitelist', []) if isinstance(doc, dict) else getattr(doc, 'permissions_timeout_whitelist', [])
+            if user.id in whitelist:
                 await interaction.followup.send(f'{user.mention} is already whitelisted.', ephemeral=True)
                 return
-            doc['permissions_timeout_whitelist'] = doc.get(
-                'permissions_timeout_whitelist', [])
-            doc['permissions_timeout_whitelist'].append(user.id)
-            await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout_whitelist': doc['permissions_timeout_whitelist']}})
+            
+            whitelist.append(user.id)
+            await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout_whitelist': whitelist}})
             await interaction.followup.send(f'{user.mention} whitelisted.', ephemeral=True)
         elif state is False:
-            if user.id not in doc.get('permissions_timeout_whitelist', []):
+            # Safe access for both dict and schema
+            whitelist = doc.get('permissions_timeout_whitelist', []) if isinstance(doc, dict) else getattr(doc, 'permissions_timeout_whitelist', [])
+            if user.id not in whitelist:
                 await interaction.followup.send(f'{user.mention} is not whitelisted.', ephemeral=True)
                 return
-            doc['permissions_timeout_whitelist'].remove(user.id)
-            await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout_whitelist': doc['permissions_timeout_whitelist']}})
+            
+            whitelist.remove(user.id)
+            await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'permissions_timeout_whitelist': whitelist}})
             await interaction.followup.send(f'{user.mention} unwhitelisted.', ephemeral=True)
 
     @auto_mod.command(name="whitelist", description="Whitelist a user or channel from automod")
     @app_commands.default_permissions(manage_guild=True)
     @app_commands.guild_only()
     @checks.is_guild_owner()
-    async def whitelist(self, interaction: discord.Interaction, state: bool = True, user: discord.User = None, channel: discord.TextChannel = None):
+    async def whitelist(self, interaction: discord.Interaction, state: bool = True, user: discord.User | None = None, channel: discord.TextChannel | None = None):
+        if not interaction.guild:
+            await interaction.response.send_message('This command can only be used in a server.', ephemeral=True)
+            return
+            
         await interaction.response.defer(ephemeral=True)
         if user is None and channel is None:
             await interaction.followup.send(f'Invalid arguments. Please provide a user or channel.', ephemeral=True)
@@ -441,27 +548,31 @@ class Automod(commands.Cog):
             return
 
         user_or_channel = user if user is not None else channel
+        if user_or_channel is None:
+            return
+            
         doc = await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id})
         if doc is None:
             await self.bot.database.automodsettings.insert_one({'guild': interaction.guild.id, 'whitelist': []})
             doc = await self.bot.database.automodsettings.find_one({'guild': interaction.guild.id})
 
+        # Safe access for both dict and schema
+        whitelist = doc.get('whitelist', []) if isinstance(doc, dict) else getattr(doc, 'whitelist', [])
+
         if state:
-            if user_or_channel.id in doc.get('whitelist', []):
+            if user_or_channel.id in whitelist:
                 await interaction.followup.send(f'{user_or_channel.mention} is already whitelisted.', ephemeral=True)
                 return
             
-            doc['whitelist'] = [] if doc.get(
-                'whitelist') is None else doc.get('whitelist')
-            doc['whitelist'].append(user_or_channel.id)
+            whitelist.append(user_or_channel.id)
         else:
-            if user_or_channel.id not in doc.get('whitelist', []):
+            if user_or_channel.id not in whitelist:
                 await interaction.followup.send(f'{user_or_channel.mention} is not whitelisted.', ephemeral=True)
                 return
             
-            doc['whitelist'].remove(user_or_channel.id)
+            whitelist.remove(user_or_channel.id)
 
-        await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'whitelist': doc['whitelist']}})
+        await self.bot.database.automodsettings.update_one({'guild': interaction.guild.id}, {'$set': {'whitelist': whitelist}})
 
         if state is True:
             await interaction.followup.send(f'{user_or_channel.mention} whitelisted.', ephemeral=True)
@@ -472,5 +583,7 @@ class Automod(commands.Cog):
 async def setup(bot: KidneyBot):
     automod = Automod(bot)
     if bot.config.perspective_api_key is None:
-        automod.auto_mod = None
+        # Disable AI commands if no API key
+        automod.auto_mod.remove_command('ai')
+        automod.auto_mod.remove_command('ai_overview')
     await bot.add_cog(automod)

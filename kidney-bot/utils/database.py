@@ -3,11 +3,129 @@
 # Full license at LICENSE.md
 
 import logging
-from typing import Any, Type
-import motor.motor_asyncio
+from typing import Any, Type, Union, TypedDict
+from pymongo import AsyncMongoClient
 import asyncio
 
 from utils.cache import Cache
+
+
+# TypedDict definitions for type-safe database document access
+class ActiveGuardSettingsDict(TypedDict, total=False):
+    guild_id: int
+    block_known_spammers: bool
+
+
+class AiDetectionDict(TypedDict, total=False):
+    guild: int
+    enabled: bool
+    TOXICITY: int
+    SEVERE_TOXICITY: int
+    IDENTITY_ATTACK: int
+    INSULT: int
+    PROFANITY: int
+    THREAT: int
+    FLIRTATION: int
+    OBSCENE: int
+    SPAM: int
+
+
+class AutoModSettingsDict(TypedDict, total=False):
+    guild: int
+    log_channel: int
+    whitelist: list[int]
+    permissions_timeout: int
+    permissions_timeout_whitelist: list[int]
+
+
+class CurrencyDict(TypedDict, total=False):
+    userID: str
+    wallet: str
+    bank: str
+    inventory: dict
+
+
+class ReportsDict(TypedDict, total=False):
+    report_id: str
+    reporter: int
+    time_reported: float
+    reported_user: int
+    reported_user_name: str
+    reason: str
+    attached_message: str
+    attached_message_attachments: list
+    report_status: str
+    handled_by: int
+
+
+class ScammerListDict(TypedDict, total=False):
+    user: int
+    time: int
+    reason: str
+
+
+class ServerBansDict(TypedDict, total=False):
+    id: int
+    name: str
+    owner: str
+    reason: str
+
+
+class RoleDict(TypedDict, total=False):
+    id: int
+    delay: int
+
+
+class AutoRoleSettingsDict(TypedDict, total=False):
+    guild: int
+    roles: list[RoleDict]
+    BotsGetRoles: bool
+
+
+class ExceptionSchemaDict(TypedDict, total=False):
+    user_id: int
+    always_report_errors: bool
+
+
+class UserConfigDict(TypedDict, total=False):
+    user_id: int
+    announce_level: int
+    ephemeral_moderation_messages: bool
+
+
+class GuildConfigDict(TypedDict, total=False):
+    guild_id: int
+    ephemeral_moderation_messages: bool
+    ephemeral_setting_overpowers_user_setting: bool
+
+
+class WarnDict(TypedDict, total=False):
+    reason: str
+    timestamp: int
+    moderator: int
+    id: str
+
+
+class WarnSchemaDict(TypedDict, total=False):
+    user_id: int
+    guild_id: int
+    warns: list[WarnDict]
+
+
+# Union types for flexible schema/dict document access
+ActiveGuardSettingsDocument = Union['Schemas.ActiveGuardSettings', ActiveGuardSettingsDict, None]
+AiDetectionDocument = Union['Schemas.AiDetection', AiDetectionDict, None]
+AutoModSettingsDocument = Union['Schemas.AutoModSettings', AutoModSettingsDict, None]
+CurrencyDocument = Union['Schemas.Currency', CurrencyDict, None]
+ReportsDocument = Union['Schemas.Reports', ReportsDict, None]
+ScammerListDocument = Union['Schemas.ScammerList', ScammerListDict, None]
+ServerBansDocument = Union['Schemas.ServerBans', ServerBansDict, None]
+RoleDocument = Union['Schemas.RoleSchema', RoleDict, None]
+AutoRoleSettingsDocument = Union['Schemas.AutoRoleSettings', AutoRoleSettingsDict, None]
+ExceptionSchemaDocument = Union['Schemas.ExceptionSchema', ExceptionSchemaDict, None]
+UserConfigDocument = Union['Schemas.UserConfig', UserConfigDict, None]
+GuildConfigDocument = Union['Schemas.GuildConfig', GuildConfigDict, None]
+WarnSchemaDocument = Union['Schemas.WarnSchema', WarnSchemaDict, None]
 
 
 def convert_except_none(value, type, default=None, error=True) -> Any:
@@ -33,7 +151,7 @@ class Schemas:
             pass
 
         @classmethod
-        def from_dict(cls, data: dict) -> None:
+        def from_dict(cls, data: dict) -> 'Schemas.BaseSchema':
             raise NotImplementedError(
                 'This method must be implemented in a subclass.')
 
@@ -399,8 +517,8 @@ class Schemas:
 class Collection:
     """Wrapper for motor.motor_asyncio.AsyncIOMotorCollection. If a schema is provided, all queries will be converted to the schema."""
 
-    def __init__(self, database: 'Database', collection: motor.motor_asyncio.AsyncIOMotorCollection, schema: Type[Schemas.BaseSchema] | None = None) -> None:
-        self.collection: motor.motor_asyncio.AsyncIOMotorCollection = collection
+    def __init__(self, database: 'Database', collection: Any, schema: Type[Schemas.BaseSchema] | None = None) -> None:
+        self.collection = collection
         self.schema: Type[Schemas.BaseSchema] | None = schema
         self.database = database
         self.cache = Cache(60*5)
@@ -408,7 +526,7 @@ class Collection:
         asyncio.create_task(self.cache.cleanup_task())
 
     """Find one document in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> dict | Type[Schemas.BaseSchema] | None:
+    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> dict | Schemas.BaseSchema | None:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
@@ -430,11 +548,11 @@ class Collection:
         return schema.from_dict(document)
 
     """Find all documents in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> motor.motor_asyncio.AsyncIOMotorCursor | list[Schemas.BaseSchema]:
+    async def find(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> list[dict] | list[Schemas.BaseSchema]:
         if isinstance(query, Schemas.BaseSchema):
             query = query.to_dict()
 
-        documents: motor.MotorCursor = self.collection.find(query)
+        documents = self.collection.find(query)
         documents = await documents.to_list(length=None)
         await self.cache.add_many(documents)
 
@@ -445,7 +563,7 @@ class Collection:
             return documents
 
         # type: ignore
-        return [self.schema.from_dict(document) for document in documents]
+        return [schema.from_dict(document) for document in documents]
 
     """Update one document in the collection."""
     async def update_one(self, query: dict | Schemas.BaseSchema, update: dict, upsert: bool = False) -> None:
@@ -495,7 +613,7 @@ class Database:
             return
 
         logging.info(f'Connecting to database.')
-        self.client: motor.motor_asyncio.AsyncIOMotorClient = motor.motor_asyncio.AsyncIOMotorClient(
+        self.client: AsyncMongoClient = AsyncMongoClient(
             self.dbstring, serverSelectionTimeoutMS=5000)
 
         try:
@@ -508,7 +626,7 @@ class Database:
 
         self.connected = True
 
-        self.database: motor.motor_asyncio.AsyncIOMotorDatabase = self.client.data
+        self.database = self.client.data
 
         self.active_guard_settings = Collection(
             self, self.database.active_guard_settings)
@@ -523,7 +641,7 @@ class Database:
 
         self.scammer_list = Collection(self, self.database.scammer_list)
 
-        self.serverbans = Collection(self, self.database.serverbans)
+        self.serverbans = Collection(self, self.database.serverbans, Schemas.ServerBans)
 
         self.autorolesettings = Collection(
             self, self.database.autorolesettings)

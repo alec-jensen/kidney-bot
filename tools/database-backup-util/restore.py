@@ -19,6 +19,8 @@ from bson import json_util
 import json
 import sys
 
+import pymongo.errors
+
 parser = argparse.ArgumentParser(prog='DatabaseRestoreTool', description='Restore your MongoDB database from a backup!', epilog='Written by Alec Jensen')
 
 parser.add_argument('backup_name')

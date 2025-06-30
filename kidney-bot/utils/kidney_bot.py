@@ -9,7 +9,7 @@ import logging
 from typing import Optional
 
 from utils.config import Config
-from utils.database import Database, Schemas
+from utils.database import Database, Schemas, CurrencyDocument, AutoModSettingsDocument
 import utils.types as types
 
 def get_prefix(bot: 'KidneyBot', message: discord.Message) -> list[str]:
@@ -43,14 +43,26 @@ class KidneyBot(commands.Bot):
 
     """Add currency to a user's wallet or bank."""
     async def add_currency(self, user: types.AnyUser, value: int, location: str) -> None:
-        doc: Optional[Schemas.Currency] = await self.database.currency.find_one({"userID": str(user.id)}, Schemas.Currency)
+        doc = await self.database.currency.find_one({"userID": str(user.id)})
         if doc is not None:
             if location == 'wallet':
+                # Handle both schema and dict access patterns
+                if isinstance(doc, dict):
+                    current_wallet = doc.get('wallet', '0')
+                else:
+                    current_wallet = getattr(doc, 'wallet', '0')
+                wallet_value = int(current_wallet or '0') + value
                 await self.database.currency.update_one({'userID': str(user.id)},
-                                                        {'$set': {'wallet': str(int(doc.wallet) + value)}})
+                                                        {'$set': {'wallet': str(wallet_value)}})
             elif location == 'bank':
+                # Handle both schema and dict access patterns  
+                if isinstance(doc, dict):
+                    current_bank = doc.get('bank', '0')
+                else:
+                    current_bank = getattr(doc, 'bank', '0')
+                bank_value = int(current_bank or '0') + value
                 await self.database.currency.update_one({'userID': str(user.id)},
-                                                        {'$set': {'bank': str(int(doc.bank) + value)}})
+                                                        {'$set': {'bank': str(bank_value)}})
         else:
             wallet, bank = (0, 0)
             if location == 'wallet':
@@ -73,7 +85,14 @@ class KidneyBot(commands.Bot):
         doc = await self.database.automodsettings.find_one({'guild': guild.id})
         if doc is None:
             return
-        if doc.get('log_channel') is None:
+        
+        # Handle both schema and dict access patterns
+        if isinstance(doc, dict):
+            log_channel_id = doc.get('log_channel')
+        else:
+            log_channel_id = getattr(doc, 'log_channel', None)
+            
+        if log_channel_id is None:
             return
 
         color = discord.Color.red() if color is None else color
@@ -85,7 +104,11 @@ class KidneyBot(commands.Bot):
                               (f'**Message:** ```{message.content}```' if message is not None else ''),
                               color=color)
         embed.set_footer(text=f'Automated logging by kidney bot')
-        return await self.get_channel(doc['log_channel']).send(embed=embed)
+        
+        channel = self.get_channel(log_channel_id)
+        if channel and isinstance(channel, (discord.TextChannel, discord.Thread)):
+            return await channel.send(embed=embed)
+        return None
     
     def get_lang_string(self, path: list[str] | str, default: str | None = None) -> str:
         """Get a string from the language file."""
@@ -109,58 +132,67 @@ class _OptimisticUser:
     def __init__(self, user: discord.User | discord.Member):
         self._user = user
         logging.info(type(self._user))
-        self.bot: KidneyBot = KidneyBot.instance
+        
+        # Handle potential None instance
+        bot_instance = KidneyBot.instance
+        if bot_instance is None:
+            raise RuntimeError("KidneyBot instance not initialized")
+        self.bot: KidneyBot = bot_instance
 
         self.economy = asyncio.create_task(self._optimistic_economy())
         self.scammer_list = asyncio.create_task(
             self._optimistic_scammer_list())
 
-    def require(self, *args: list[callable]):
+    def require(self, *args):
         """Tell object what data to load. This is a coroutine.
         If this is not called, the object will load all data."""
-        if not self._optimistic_economy in args:
-            if self.economy.done():
-                self.economy = None
-            else:
-                self.economy.cancel()
-                self.economy = None
+        if self._optimistic_economy not in args:
+            if self.economy is not None:
+                if self.economy.done():
+                    self.economy = None
+                else:
+                    self.economy.cancel()
+                    self.economy = None
 
-        if not self._optimistic_scammer_list in args:
-            if self.scammer_list.done():
-                self.scammer_list = None
-            else:
-                self.scammer_list.cancel()
-                self.scammer_list = None
+        if self._optimistic_scammer_list not in args:
+            if self.scammer_list is not None:
+                if self.scammer_list.done():
+                    self.scammer_list = None
+                else:
+                    self.scammer_list.cancel()
+                    self.scammer_list = None
 
-    async def _optimistic_economy(self) -> Schemas.Currency:
-        return await self.bot.database.currency.find_one({"userID": str(self._user.id)}, Schemas.Currency)
+    async def _optimistic_economy(self):
+        result = await self.bot.database.currency.find_one({"userID": str(self._user.id)})
+        return result
 
-    async def _optimistic_scammer_list(self) -> Schemas.ScammerList:
-        return await self.bot.database.scammer_list.find_one({"user": str(self._user.id)}, Schemas.ScammerList)
+    async def _optimistic_scammer_list(self):
+        result = await self.bot.database.scammer_list.find_one({"user": str(self._user.id)})
+        return result
 
 
 class KBUser(_OptimisticUser):
-    def __init__(self, ctx: commands.Context = None, user: discord.User = None):
+    def __init__(self, ctx: Optional[commands.Context] = None, user: Optional[discord.User] = None):
         raise NotImplementedError("KBUser is not implemented yet.")
 
 
 class KBMember(_OptimisticUser):
-    async def async_init(self, ctx: commands.Context, member: discord.Member):
-        if isinstance(member, str):
-            self.member: discord.Member = await commands.MemberConverter().convert(ctx, member)
-        elif isinstance(member, discord.Member):
-            self.member: discord.Member = member
+    async def async_init(self, ctx: commands.Context, member_input: discord.Member | str):
+        if isinstance(member_input, str):
+            self.member = await commands.MemberConverter().convert(ctx, member_input)
+        elif isinstance(member_input, discord.Member):
+            self.member = member_input
         else:
             raise TypeError(
-                f"Expected str or discord.Member, got {type(member)}")
+                f"Expected str or discord.Member, got {type(member_input)}")
 
         _OptimisticUser.__init__(self, self.member)
 
-    def __init__(self, ctx: commands.Context = None, member: discord.Member = None):
-        self.ctx: commands.Context = ctx
+    def __init__(self, ctx: Optional[commands.Context] = None, member: Optional[discord.Member] = None):
+        self.ctx = ctx
 
         if member is None:
-            self.member: discord.Member = None
+            self.member = None
             return
 
     async def convert(self, ctx, arg):
