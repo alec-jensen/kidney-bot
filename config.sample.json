@@ -12,5 +12,7 @@
     "error_channel": "",
     "prefix": "kb.",
     "langfile": "lang/en.yml",
-    "heartbeat_url": ""
+    "heartbeat_url": "",
+    "spotify_client_id": "",
+    "spotify_client_secret": ""
 }

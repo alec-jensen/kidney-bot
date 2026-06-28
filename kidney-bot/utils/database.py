@@ -656,6 +656,8 @@ class Database:
         
         self.warnings = Collection(self, self.database.warnings, Schemas.WarnSchema)
 
+        self.music_queues = Collection(self, self.database.music_queues)
+
         self.collections = [self.active_guard_settings, self.ai_detection, self.automodsettings, self.currency, self.reports,
                             self.scammer_list, self.serverbans, self.autorolesettings, self.exceptions, self.user_config, self.guild_config,
-                            self.warnings]
+                            self.warnings, self.music_queues]

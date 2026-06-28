@@ -102,6 +102,11 @@ class Config:
             if self.heartbeat_url == '':
                 self.heartbeat_url = None
 
+            self.spotify_client_id: str | None = self.conf_json.get('spotify_client_id') or None
+            self.spotify_client_secret: str | None = self.conf_json.get('spotify_client_secret') or None
+            if not (self.spotify_client_id and self.spotify_client_secret):
+                logging.warning('Spotify credentials not configured — Spotify links will be disabled.')
+
             with open(self.langfile, 'r') as f:
                 self.lang = yaml.safe_load(f)
 

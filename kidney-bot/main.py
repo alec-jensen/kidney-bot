@@ -126,7 +126,7 @@ async def on_ready():
     try:
         with open("pyproject.toml", "r") as f:
             pyproject = toml.load(f)
-            version = pyproject["tool"]["poetry"]["version"]
+            version = pyproject["project"]["version"]
     except FileNotFoundError:
         version = "unknown"
     except Exception as e:
@@ -563,31 +563,45 @@ heartbeat_task: asyncio.Task | None = None
 async def main():
     global status_task, user_count_task, heartbeat_task, cache_cleanup_task
 
-    async with bot:
-        for filename in os.listdir(os.path.join(os.path.dirname(__file__), "cogs")):
-            if filename.endswith(".py"):
-                if not filename.startswith("-"):
-                    await bot.load_extension(f"cogs.{filename[:-3]}")
+    try:
+        async with bot:
+            for filename in os.listdir(os.path.join(os.path.dirname(__file__), "cogs")):
+                if filename.endswith(".py"):
+                    if not filename.startswith("-"):
+                        await bot.load_extension(f"cogs.{filename[:-3]}")
 
-        await bot.database.connect()
+            await bot.database.connect()
 
-        # Wait for database to connect
-        while not bot.database.connected:
-            await asyncio.sleep(0.1)
+            # Wait for database to connect
+            while not bot.database.connected:
+                await asyncio.sleep(0.1)
 
-        status_task = asyncio.create_task(status())
+            status_task = asyncio.create_task(status())
 
-        if bot.config.user_count_channel_id is not None:
-            user_count_task = asyncio.create_task(user_count())
-        else:
-            logging.warning("No user count channel set, not counting users.")
+            if bot.config.user_count_channel_id is not None:
+                user_count_task = asyncio.create_task(user_count())
+            else:
+                logging.warning("No user count channel set, not counting users.")
 
-        if bot.config.heartbeat_url is not None:
-            heartbeat_task = asyncio.create_task(heartbeat())
-        else:
-            logging.warning("No heartbeat URL set, not sending heartbeats.")
+            if bot.config.heartbeat_url is not None:
+                heartbeat_task = asyncio.create_task(heartbeat())
+            else:
+                logging.warning("No heartbeat URL set, not sending heartbeats.")
 
-        await bot.start(bot.config.token)
+            try:
+                await bot.start(bot.config.token)
+            finally:
+                # Cancel background tasks in the same event loop before bot.close() runs
+                for task in filter(None, [status_task, user_count_task, heartbeat_task]):
+                    task.cancel()
+
+        # async with bot exits here: __aexit__ calls bot.close() which unloads cogs
+        # (music cog saves queue state to MongoDB before returning), then we close the client.
+    finally:
+        logging.info("Shutting down...")
+        if bot.database.connected:
+            await bot.database.client.close()  # type: ignore
+        logging.info("Shutdown complete.")
 
 
 if __name__ == "__main__":
@@ -598,19 +612,3 @@ if __name__ == "__main__":
     except Exception as e:
         logging.critical(f"Fatal error: {e}")
         logging.critical(traceback.format_exc())
-
-    logging.info("Shutting down...")
-
-    if status_task is not None:
-        status_task.cancel()
-    if user_count_task is not None:
-        user_count_task.cancel()
-    if heartbeat_task is not None:
-        heartbeat_task.cancel()
-
-    if bot.database.connected:
-        bot.database.client.close()  # type: ignore
-
-    asyncio.run(bot.close())
-
-    logging.info("Shutdown complete.")
