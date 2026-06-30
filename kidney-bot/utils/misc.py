@@ -1,28 +1,29 @@
-def ordinal(n: int):
+def ordinal(n: int) -> str:
     if 11 <= (n % 100) <= 13:
         suffix = 'th'
     else:
         suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
     return str(n) + suffix
 
-def humanbytes(B):
+def humanbytes(b: int | float) -> str | None:
     """Return the given bytes as a human friendly KB, MB, GB, or TB string."""
-    B = float(B)
+    fb = float(b)
     KB = float(1024)
     MB = float(KB ** 2) # 1,048,576
     GB = float(KB ** 3) # 1,073,741,824
     TB = float(KB ** 4) # 1,099,511,627,776
 
-    if B < KB:
-        return '{0} {1}'.format(B,'Bytes' if 0 == B > 1 else 'Byte')
-    elif KB <= B < MB:
-        return '{0:.2f} KB'.format(B / KB)
-    elif MB <= B < GB:
-        return '{0:.2f} MB'.format(B / MB)
-    elif GB <= B < TB:
-        return '{0:.2f} GB'.format(B / GB)
-    elif TB <= B:
-        return '{0:.2f} TB'.format(B / TB)
+    if fb < KB:
+        return '{} {}'.format(fb,'Bytes' if 0 == fb > 1 else 'Byte')
+    elif KB <= fb < MB:
+        return f'{fb / KB:.2f} KB'
+    elif MB <= fb < GB:
+        return f'{fb / MB:.2f} MB'
+    elif GB <= fb < TB:
+        return f'{fb / GB:.2f} GB'
+    elif TB <= fb:
+        return f'{fb / TB:.2f} TB'
+    return None
 
 assert ordinal(1) == '1st'
 assert ordinal(2) == '2nd'

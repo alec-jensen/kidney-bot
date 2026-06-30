@@ -11,16 +11,15 @@ import re
 import time
 import traceback
 from dataclasses import dataclass
-from typing import Optional
 
 import discord
+import yt_dlp
 from discord import app_commands
 from discord.ext import commands
-import yt_dlp
-
-from utils.kidney_bot import KidneyBot
-
 from spotdl.utils.spotify import SpotifyClient
+
+from utils import database
+from utils.kidney_bot import KidneyBot
 
 log = logging.getLogger(__name__)
 
@@ -49,7 +48,7 @@ class LoopMode(enum.Enum):
 class Track:
     title: str
     webpage_url: str  # stable page URL (or ytsearch: query before first play)
-    thumbnail: Optional[str]
+    thumbnail: str | None
     duration: int     # seconds; 0 if unknown
     requester_id: int
     requester_name: str
@@ -88,14 +87,14 @@ class GuildMusicState:
         self.bot = bot
         self.guild = guild
         self.queue: list[Track] = []
-        self.current: Optional[Track] = None
-        self.voice_client: Optional[discord.VoiceClient] = None
-        self.text_channel: Optional[discord.TextChannel] = None
+        self.current: Track | None = None
+        self.voice_client: discord.VoiceClient | None = None
+        self.text_channel: discord.TextChannel | None = None
         self.loop_mode = LoopMode.OFF
         self.volume: float = 0.5
 
         self._play_next_event = asyncio.Event()
-        self._player_task: Optional[asyncio.Task] = None
+        self._player_task: asyncio.Task | None = None
 
         self._play_start: float = 0.0
         self._pause_start: float = 0.0
@@ -103,23 +102,23 @@ class GuildMusicState:
         self._seek_offset: float = 0.0
 
         # If set, player loop replays current track from this position
-        self._seek_position: Optional[float] = None
+        self._seek_position: float | None = None
 
-        self._alone_since: Optional[float] = None
+        self._alone_since: float | None = None
         self._paused_for_alone: bool = False
 
         # Pre-fetch: resolved stream for queue[0], ready before it's needed
-        self._prefetch_task: Optional[asyncio.Task] = None
-        self._prefetched: Optional[tuple[Track, str, str]] = None  # (track, stream_url, before_opts)
+        self._prefetch_task: asyncio.Task | None = None
+        self._prefetched: tuple[Track, str, str] | None = None  # (track, stream_url, before_opts)
 
         # Persistent now-playing panel message
-        self._np_message: Optional[discord.Message] = None
+        self._np_message: discord.Message | None = None
 
         # Set before intentional disconnects so on_voice_state_update won't reconnect
         self._intentional_disconnect: bool = False
 
         # Injected by Music._state() so the player loop can update the NP panel
-        self._cog: Optional["Music"] = None
+        self._cog: Music | None = None
 
         log.debug(f"[{guild}] GuildMusicState created")
 
@@ -198,7 +197,7 @@ class GuildMusicState:
 
     # ── Player task ───────────────────────────────────────────────────────────
 
-    def _after_play(self, error: Optional[Exception]):
+    def _after_play(self, error: Exception | None):
         if error:
             log.error(f"[{self.guild}] Playback error from FFmpeg: {error}")
         else:
@@ -305,7 +304,7 @@ class GuildMusicState:
             await self._play_next_event.wait()
             log.debug(f"[{self.guild}] Play-next event fired for '{track.title}'")
 
-    def _next_track(self) -> Optional[Track]:
+    def _next_track(self) -> Track | None:
         if self.loop_mode == LoopMode.TRACK and self.current is not None:
             log.debug(f"[{self.guild}] Loop=TRACK: replaying '{self.current.title}'")
             return self.current
@@ -320,12 +319,12 @@ class GuildMusicState:
     # ── Stream fetching ───────────────────────────────────────────────────────
 
     async def _fetch_stream(
-        self, webpage_url: str, seek_to: Optional[float] = None
-    ) -> tuple[str, str, Optional[str]]:
+        self, webpage_url: str, seek_to: float | None = None
+    ) -> tuple[str, str, str | None]:
         """Returns (audio_stream_url, ffmpeg_before_options, resolved_webpage_url)."""
         def _run():
             opts = {**_YDL_COMMON, "format": "bestaudio/best"}
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:  # type: ignore[arg-type]
                 t0 = time.perf_counter()
                 log.debug(f"yt-dlp extracting info for: {webpage_url[:80]}")
                 info = ydl.extract_info(webpage_url, download=False)
@@ -338,7 +337,7 @@ class GuildMusicState:
 
                 # Unwrap search results / playlists to a single video entry
                 if info.get("_type") in ("playlist", "multi_video"):
-                    entries = list(info.get("entries") or [])
+                    entries: list = list(info.get("entries") or [])  # type: ignore[arg-type]
                     log.debug(f"yt-dlp got playlist/search result with {len(entries)} entr{'y' if len(entries) == 1 else 'ies'}")
                     if not entries:
                         raise RuntimeError("No results found for query")
@@ -359,13 +358,13 @@ class GuildMusicState:
                         if not info:
                             raise RuntimeError("Failed to extract video info")
 
-                formats = info.get("formats", [info])
+                formats: list = info.get("formats", [info])  # type: ignore[assignment]
                 audio_only = [
                     f for f in formats
                     if f.get("acodec") != "none" and f.get("vcodec") == "none"
                 ]
                 candidates = audio_only if audio_only else formats
-                best = max(candidates, key=lambda f: f.get("tbr") or f.get("abr") or 0)
+                best = max(candidates, key=lambda f: f.get("tbr") or f.get("abr") or 0)  # type: ignore[arg-type]
 
                 log.debug(
                     f"yt-dlp selected format: id={best.get('format_id')} "
@@ -515,19 +514,17 @@ class GuildMusicState:
     # ── Persistence ───────────────────────────────────────────────────────────
 
     async def _save(self):
+        from utils.database import Schemas
         try:
-            doc = {
-                "guild_id": self.guild.id,
-                "voice_channel_id": self.voice_client.channel.id if self.voice_client and self.voice_client.channel else None,
-                "text_channel_id": self.text_channel.id if self.text_channel else None,
-                "current": self.current.to_dict() if self.current else None,
-                "queue": [t.to_dict() for t in self.queue],
-                "loop_mode": self.loop_mode.value,
-                "volume": self.volume,
-            }
-            await self.bot.database.music_queues.collection.replace_one(
-                {"guild_id": self.guild.id}, doc, upsert=True
-            )
+            await self.bot.database.music_queues.save(Schemas.MusicQueue(
+                guild_id=self.guild.id,
+                voice_channel_id=self.voice_client.channel.id if self.voice_client and self.voice_client.channel else None,
+                text_channel_id=self.text_channel.id if self.text_channel else None,
+                current=self.current.to_dict() if self.current else None,
+                queue=[t.to_dict() for t in self.queue],
+                loop_mode=self.loop_mode.value,
+                volume=self.volume,
+            ))
             log.debug(f"[{self.guild}] State saved (current='{self.current.title if self.current else None}', queue={len(self.queue)})")
         except Exception as e:
             log.error(f"[{self.guild}] Failed to save music state: {e}")
@@ -544,7 +541,7 @@ class GuildMusicState:
             self._player_task.cancel()
             try:
                 await asyncio.wait_for(asyncio.shield(self._player_task), timeout=2)
-            except (asyncio.CancelledError, asyncio.TimeoutError):
+            except (TimeoutError, asyncio.CancelledError):
                 pass
             self._player_task = None
 
@@ -566,9 +563,7 @@ class GuildMusicState:
 
         if not save:
             try:
-                await self.bot.database.music_queues.collection.delete_one(
-                    {"guild_id": self.guild.id}
-                )
+                await self.bot.database.music_queues.delete(self.guild.id)
                 log.debug(f"[{self.guild}] Persisted state cleared from DB")
             except Exception as e:
                 log.error(f"[{self.guild}] Failed to clear persisted state: {e}")
@@ -659,7 +654,7 @@ class NowPlayingView(discord.ui.View):
             self.pause_resume_btn.emoji = "▶"
             self.pause_resume_btn.style = discord.ButtonStyle.success
 
-    def _state(self) -> Optional[GuildMusicState]:
+    def _state(self) -> GuildMusicState | None:
         return self.cog._states.get(self.guild_id)
 
     def _in_channel(self, interaction: discord.Interaction) -> bool:
@@ -753,8 +748,9 @@ class Music(commands.Cog):
     def __init__(self, bot: KidneyBot):
         self.bot = bot
         self._states: dict[int, GuildMusicState] = {}
-        self._spotify_client: Optional[SpotifyClient] = None
+        self._spotify_client: SpotifyClient | None = None
         self._monitor_task: asyncio.Task = asyncio.create_task(self._monitor_loop())
+        self._background_tasks: set[asyncio.Task] = set()
 
     def _state(self, guild: discord.Guild) -> GuildMusicState:
         if guild.id not in self._states:
@@ -771,17 +767,19 @@ class Music(commands.Cog):
 
     @commands.Cog.listener()
     async def on_ready(self):
-        log.info("Music cog: initializing spotdl SpotifyClient (use_official_api=False)")
-        t0 = time.perf_counter()
-        self._spotify_client = SpotifyClient.init(
-            client_id="",
-            client_secret="",
-            use_official_api=False,
-            headless=True,
-            no_cache=True,
-        )
-        log.info(f"Music cog: SpotifyClient initialized in {time.perf_counter() - t0:.2f}s — instance: {type(self._spotify_client).__name__}")
-        await self._restore_queues()
+        if self._spotify_client is None:
+            log.info("Music cog: initializing spotdl SpotifyClient (use_official_api=False)")
+            t0 = time.perf_counter()
+            self._spotify_client = await asyncio.to_thread(
+                SpotifyClient.init,
+                client_id="",
+                client_secret="",
+                use_official_api=False,
+                headless=True,
+                no_cache=True,
+            )
+            log.info(f"Music cog: SpotifyClient initialized in {time.perf_counter() - t0:.2f}s — instance: {type(self._spotify_client).__name__}")
+            await self._restore_queues()
 
     # ── Voice disconnect recovery ──────────────────────────────────────────────
 
@@ -792,7 +790,7 @@ class Music(commands.Cog):
         before: discord.VoiceState,
         after: discord.VoiceState,
     ):
-        if not member.bot or member.id != self.bot.user.id:
+        if not member.bot or self.bot.user is None or member.id != self.bot.user.id:
             return
         # Bot was removed from a channel
         if before.channel is None or after.channel is not None:
@@ -839,23 +837,23 @@ class Music(commands.Cog):
         t0 = time.perf_counter()
         count = 0
         try:
-            col = self.bot.database.music_queues.collection
-            async for doc in col.find({}):
+            docs = await self.bot.database.music_queues.all()
+            for doc in docs:
                 await self._restore_one(doc)
                 count += 1
         except Exception as e:
             log.error(f"Failed to restore music queues: {e}\n{traceback.format_exc()}")
         log.info(f"Queue restore complete: {count} guild(s) queues loaded in {time.perf_counter() - t0:.2f}s")
 
-    async def _restore_one(self, doc: dict):
-        guild_id: int = doc.get("guild_id", 0)
+    async def _restore_one(self, doc: 'database.Schemas.MusicQueue'):
+        guild_id: int = doc.guild_id or 0
         guild = self.bot.get_guild(guild_id)
         if guild is None:
             log.debug(f"Queue restore: guild {guild_id} not found (bot may have left)")
             return
 
-        vc_id: Optional[int] = doc.get("voice_channel_id")
-        tc_id: Optional[int] = doc.get("text_channel_id")
+        vc_id: int | None = doc.voice_channel_id
+        tc_id: int | None = doc.text_channel_id
         if vc_id is None:
             log.debug(f"Queue restore [{guild}]: no voice_channel_id in doc, skipping")
             return
@@ -866,8 +864,10 @@ class Music(commands.Cog):
             return
 
         state = self._state(guild)
-        state.loop_mode = LoopMode(doc.get("loop_mode", "off"))
-        state.volume = float(doc.get("volume", 0.5))
+        loop_mode_val = doc.loop_mode
+        volume_val = doc.volume
+        state.loop_mode = LoopMode(loop_mode_val or "off")
+        state.volume = float(volume_val or 0.5)
 
         if tc_id:
             ch = guild.get_channel(tc_id)
@@ -877,12 +877,14 @@ class Music(commands.Cog):
                 log.debug(f"Queue restore [{guild}]: text channel {tc_id} not found")
 
         tracks: list[Track] = []
-        if current := doc.get("current"):
+        current_data = doc.current
+        queue_data = doc.queue
+        if current_data:
             try:
-                tracks.append(Track.from_dict(current))
+                tracks.append(Track.from_dict(current_data))
             except Exception as e:
                 log.warning(f"Queue restore [{guild}]: failed to deserialize current track: {e}")
-        for t in doc.get("queue", []):
+        for t in (queue_data or []):
             try:
                 tracks.append(Track.from_dict(t))
             except Exception as e:
@@ -898,10 +900,12 @@ class Music(commands.Cog):
         # Delay the voice connect so the gateway is fully settled (DAVE E2EE handshake
         # needs all guild events processed first). Queue is already restored so /resume
         # works immediately if the auto-rejoin fails.
-        asyncio.create_task(
+        task = asyncio.create_task(
             self._rejoin_after_restore(state, guild, voice_ch),
             name=f"restore-rejoin-{guild.id}",
         )
+        self._background_tasks.add(task)
+        task.add_done_callback(self._background_tasks.discard)
 
     async def _rejoin_after_restore(
         self, state: "GuildMusicState", guild: discord.Guild, voice_ch: discord.VoiceChannel
@@ -984,7 +988,7 @@ class Music(commands.Cog):
             client = self._spotify_client
             if client is None:
                 raise RuntimeError("SpotifyClient is not initialized — was on_ready called?")
-            raw: list[tuple[str, list[str], Optional[str], int]] = []  # (name, artists, cover_url, duration_ms)
+            raw: list[tuple[str, list[str], str | None, int]] = []  # (name, artists, cover_url, duration_ms)
 
             if m := _SPOTIFY_TRACK_RE.search(url):
                 log.info(f"Spotify: fetching single track {m.group(1)}")
@@ -1022,7 +1026,7 @@ class Music(commands.Cog):
                     offset += len(items)
                     page += 1
                     if not data.get("next"):
-                        log.debug(f"Spotify: no more playlist pages")
+                        log.debug("Spotify: no more playlist pages")
                         break
                 log.info(f"Spotify: playlist fetch complete — {len(raw)} tracks in {page} page(s)")
 
@@ -1082,7 +1086,7 @@ class Music(commands.Cog):
     async def _resolve(self, query: str, requester: discord.Member) -> list[Track]:
         def _run():
             opts = {**_YDL_COMMON, "format": "bestaudio/best", "extract_flat": "in_playlist"}
-            with yt_dlp.YoutubeDL(opts) as ydl:
+            with yt_dlp.YoutubeDL(opts) as ydl:  # type: ignore[arg-type]
                 return ydl.extract_info(query, download=False)
 
         log.info(f"yt-dlp resolving: {query[:80]}")
@@ -1122,14 +1126,14 @@ class Music(commands.Cog):
 
     # ── Interaction guards ─────────────────────────────────────────────────────
 
-    def _pre_check_voice(self, interaction: discord.Interaction) -> Optional[str]:
+    def _pre_check_voice(self, interaction: discord.Interaction) -> str | None:
         if not interaction.guild:
             return "Server only."
         if not isinstance(interaction.user, discord.Member) or not interaction.user.voice or not interaction.user.voice.channel:
             return "You must be in a voice channel."
         return None
 
-    async def _ensure_voice(self, interaction: discord.Interaction) -> Optional[GuildMusicState]:
+    async def _ensure_voice(self, interaction: discord.Interaction) -> GuildMusicState | None:
         assert interaction.guild is not None
         assert isinstance(interaction.user, discord.Member)
         assert interaction.user.voice is not None
@@ -1159,7 +1163,7 @@ class Music(commands.Cog):
 
         return state
 
-    async def _check_same_channel(self, interaction: discord.Interaction) -> Optional[GuildMusicState]:
+    async def _check_same_channel(self, interaction: discord.Interaction) -> GuildMusicState | None:
         if not interaction.guild:
             await interaction.response.send_message("Server only.", ephemeral=True)
             return None
@@ -1395,7 +1399,7 @@ class Music(commands.Cog):
         log.info(f"[{interaction.guild}] Loop mode set to {state.loop_mode.value} by {interaction.user}")
         await interaction.response.send_message(f"Loop set to **{labels[state.loop_mode]}**.")
 
-    @app_commands.command(name="volume", description="Set the playback volume (0–100).")
+    @app_commands.command(name="volume", description="Set the playback volume (0-100).")
     @app_commands.describe(level="Volume from 0 to 100")
     @app_commands.guild_only()
     async def volume_cmd(

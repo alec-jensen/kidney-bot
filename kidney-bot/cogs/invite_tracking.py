@@ -1,13 +1,13 @@
-import discord
-from discord.ext import commands
 import logging
 
+import discord
+from discord.ext import commands
+
 from utils.kidney_bot import KidneyBot
-from utils.database import Schemas
 
 
 class InviteTracking(commands.Cog):
-    def __init__(self, bot):
+    def __init__(self, bot: KidneyBot):
         self.bot: KidneyBot = bot
 
     @commands.Cog.listener()
@@ -19,5 +19,5 @@ class InviteTracking(commands.Cog):
         pass
 
 
-async def setup(bot):
+async def setup(bot: KidneyBot):
     await bot.add_cog(InviteTracking(bot))

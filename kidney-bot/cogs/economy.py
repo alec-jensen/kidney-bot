@@ -2,22 +2,24 @@
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
-import discord
-from discord.ext import commands
-from discord import app_commands
-import random
-import logging
-from typing import Literal, Optional, cast
 import asyncio
+import logging
+import random
+from typing import Literal, cast
 
-from utils.database import Database, CurrencyDocument
-from utils.kidney_bot import KidneyBot
-from utils.checks import is_bot_owner
+import discord
+from discord import app_commands
+from discord.ext import commands
+
 import utils.types as types
+from utils.checks import is_bot_owner
+from utils.database import Database, Schemas
+from utils.kidney_bot import KidneyBot
+
 
 class Item:
     def __init__(self, id: str, name: str, price: int, description: str, one_time: bool,
-                 callback: Optional[types.AsyncFunction] = None, max_quantity: int | float = float('inf')):
+                 callback: types.AsyncFunction | None = None, max_quantity: int | float = float('inf')):
         self.id = id
         self.name = name
         self.price = price
@@ -96,7 +98,7 @@ class PhoneView(discord.ui.View):
         if await profile.wallet() < 20:
             await self.interaction.followup.send('You don\'t have enough beans!', ephemeral=True)
             return
-        
+
         await profile.add_currency(-20, 'wallet')
 
         await profile.add_item(next(i for i in items if i.id == 'pizza'))
@@ -110,7 +112,7 @@ class PhoneView(discord.ui.View):
         await asyncio.sleep(random.randint(5, 20) / 10)
         pranks = ["Your refrigerator is running, you better go catch it!", "Your bot is broken, lol", "You're a nerd",
                   "I'm calling about your car's extended warranty", "I'm calling from the IRS, you owe us money"]
-        
+
         # Check if channel supports sending messages
         if self.interaction.channel and isinstance(self.interaction.channel, (discord.TextChannel, discord.Thread)):
             await self.interaction.channel.send(f"You: {random.choice(pranks)}")
@@ -178,13 +180,13 @@ class Shop(discord.ui.View):
     async def update(self, message: discord.Message):
         next_button = discord.utils.get(self.children, label='Next')
         back_button = discord.utils.get(self.children, label='Back')
-        
+
         if isinstance(back_button, discord.ui.Button):
             if self.page == 0:
                 back_button.disabled = True
             else:
                 back_button.disabled = False
-                
+
         if isinstance(next_button, discord.ui.Button):
             if self.page == num_pages - 1:
                 next_button.disabled = True
@@ -211,108 +213,64 @@ class UserProfile:
         await self.bot.add_currency(self.user, 0, 'wallet')
 
     async def wallet(self) -> int:
-        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
-        if doc is None:
-            return 0
-        # Handle both schema and dict access patterns
-        if isinstance(doc, dict):
-            return int(doc.get('wallet', '0'))
-        else:
-            return int(getattr(doc, 'wallet', '0'))
+        doc = await self.database.currency.get(str(self.user.id))
+        return int(doc.wallet or 0) if doc else 0
 
     async def bank(self) -> int:
-        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
-        if doc is None:
-            return 0
-        # Handle both schema and dict access patterns
-        if isinstance(doc, dict):
-            return int(doc.get('bank', '0'))
-        else:
-            return int(getattr(doc, 'bank', '0'))
+        doc = await self.database.currency.get(str(self.user.id))
+        return int(doc.bank or 0) if doc else 0
 
     async def inventory(self) -> dict:
-        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
+        doc = await self.database.currency.get(str(self.user.id))
         if doc is None:
             return {}
-        # Handle both schema and dict access patterns
-        if isinstance(doc, dict):
-            inventory = doc.get('inventory', {})
-            if not isinstance(inventory, dict):
-                inventory = {}
-                doc['inventory'] = {}
-                await self.database.currency.update_one({'userID': str(self.user.id)}, {'$set': {'inventory': {}}})
-            return inventory
-        else:
-            inventory = getattr(doc, 'inventory', {})
-            if not isinstance(inventory, dict):
-                return {}
-            return inventory
-    
-    async def add_item(self, item: Item):
-        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
-        if doc is None:
-            await self.bot.add_currency(self.user, 0, 'wallet')  # Initialize currency document
-            doc = await self.database.currency.find_one({'userID': str(self.user.id)})
-        
-        # Handle both schema and dict access patterns
-        if isinstance(doc, dict):
-            inventory = doc.get('inventory', {})
-            if not isinstance(inventory, dict):
-                inventory = {}
-            count = inventory.get(item.id, 0)
-            count += 1
-            inventory[item.id] = count
-            await self.database.currency.update_one({'userID': str(self.user.id)}, {'$set': {'inventory': inventory}})
-        else:
-            # For schema objects, we need to work through the database update
-            current_inventory = await self.inventory()
-            count = current_inventory.get(item.id, 0)
-            count += 1
-            current_inventory[item.id] = count
-            await self.database.currency.update_one({'userID': str(self.user.id)}, {'$set': {'inventory': current_inventory}})
+        inv = doc.inventory
+        if not isinstance(inv, dict):
+            doc.inventory = {}
+            await self.database.currency.save(doc)
+            return {}
+        return inv
 
-    async def remove_item(self, id: str, amount: int = 1):
-        doc = await self.database.currency.find_one({'userID': str(self.user.id)})
+    async def add_item(self, item: Item):
+        doc = await self.database.currency.get(str(self.user.id))
+        if doc is None:
+            await self.bot.add_currency(self.user, 0, 'wallet')
+            doc = await self.database.currency.get(str(self.user.id))
         if doc is None:
             return
-        
-        # Handle both schema and dict access patterns  
-        if isinstance(doc, dict):
-            inventory = doc.get('inventory', {})
-            if not isinstance(inventory, dict):
-                inventory = {}
-            count = inventory.get(id, 0)
-            count -= amount
-            if count < 0:
-                count = 0
-            inventory[id] = count
-            await self.database.currency.update_one({'userID': str(self.user.id)}, {'$set': {'inventory': inventory}})
-        else:
-            # For schema objects, we need to work through the database update
-            current_inventory = await self.inventory()
-            count = current_inventory.get(id, 0)
-            count -= amount
-            if count < 0:
-                count = 0
-            current_inventory[id] = count
-            await self.database.currency.update_one({'userID': str(self.user.id)}, {'$set': {'inventory': current_inventory}})
 
-    async def doc(self):
-        return await self.database.currency.find_one({'userID': str(self.user.id)})
+        inventory = doc.inventory if isinstance(doc.inventory, dict) else {}
+        inventory[item.id] = inventory.get(item.id, 0) + 1
+        doc.inventory = inventory
+        await self.database.currency.save(doc)
+
+    async def remove_item(self, id: str, amount: int = 1):
+        doc = await self.database.currency.get(str(self.user.id))
+        if doc is None:
+            return
+
+        inventory = doc.inventory if isinstance(doc.inventory, dict) else {}
+        count = max(0, inventory.get(id, 0) - amount)
+        inventory[id] = count
+        doc.inventory = inventory
+        await self.database.currency.save(doc)
+
+    async def doc(self) -> Schemas.Currency | None:
+        return await self.database.currency.get(str(self.user.id))
 
     async def add_currency(self, amount: int, location: str):
         location = location.lower()
         if location not in ['wallet', 'bank']:
             raise ValueError(
                 f"Parameter \"location\" must be 'wallet' or 'bank' got: {location}")
-        
+
         logging.info(f'Adding {amount} beans to {self.user.display_name}\'s {location}')
         await self.bot.add_currency(self.user, amount, location)
 
 
 class Economy(commands.Cog):
 
-    def __init__(self, bot):
+    def __init__(self, bot: KidneyBot):
         self.bot: KidneyBot = bot
 
     @commands.Cog.listener()
@@ -321,13 +279,13 @@ class Economy(commands.Cog):
 
     @commands.command()
     @is_bot_owner()
-    async def resetuser(self, ctx, user: discord.User):
-        await self.bot.database.currency.delete_one({'userID': str(user.id)})
+    async def resetuser(self, ctx: commands.Context, user: discord.User):
+        await self.bot.database.currency.delete(str(user.id))
         await ctx.send('User removed successfully!')
 
     @commands.command()
     @is_bot_owner()
-    async def addmoney(self, ctx, user: discord.User, amount: int):
+    async def addmoney(self, ctx: commands.Context, user: discord.User, amount: int):
         await self.bot.add_currency(user, amount, 'wallet')
 
     @app_commands.command(name="beg", description='Imagine being that beanless lol. 30 second cooldown.')
@@ -361,12 +319,12 @@ class Economy(commands.Cog):
         await interaction.response.defer()
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
         await profile.async_init()
-        
+
         # Convert amount to integer
         amount_value: int
         try:
             amount_value = int(amount)
-        except:
+        except Exception:
             if amount.lower() == 'all':
                 amount_value = int(await profile.wallet())
             elif amount.lower() == 'half':
@@ -374,7 +332,7 @@ class Economy(commands.Cog):
             else:
                 await interaction.followup.send('Value must be a number, "all", or "half"', ephemeral=True)
                 return
-                
+
         if amount_value <= int(await profile.wallet()):
             await self.bot.add_currency(interaction.user, -amount_value, 'wallet')
             await self.bot.add_currency(interaction.user, amount_value, 'bank')
@@ -390,12 +348,12 @@ class Economy(commands.Cog):
         await interaction.response.defer()
         profile = UserProfile(self.bot, self.bot.database, interaction.user)
         await profile.async_init()
-        
+
         # Convert amount to integer
         amount_value: int
         try:
             amount_value = int(amount)
-        except:
+        except Exception:
             if amount.lower() == 'all':
                 amount_value = int(await profile.bank())
             elif amount.lower() == 'half':
@@ -403,7 +361,7 @@ class Economy(commands.Cog):
             else:
                 await interaction.followup.send('Value must be a number, "all", or "half"', ephemeral=True)
                 return
-                
+
         if amount_value <= int(await profile.bank()):
             await self.bot.add_currency(interaction.user, amount_value, 'wallet')
             await self.bot.add_currency(interaction.user, -amount_value, 'bank')
@@ -445,13 +403,13 @@ class Economy(commands.Cog):
                     await target_profile.remove_item('padlock')
                     try:
                         await target.send(f"{interaction.user.name} tried to rob you, but you had a padlock on your wallet! They lost 50 beans, and your padlock broke.")
-                    except:
+                    except Exception:
                         pass
                     return
                 else:
                     await target_profile.remove_item('padlock')
                     await profile.remove_item('bolt_cutters')
-                    USED_BOLT_CUTTERS = True
+                    # bolt cutters consumed
             amount = random.randint(0, int(await target_profile.wallet() // 6))
             if amount < 2:
                 await interaction.followup.send('You were caught! You pay 50 beans in fines.')
@@ -560,11 +518,11 @@ you got {amount} beans!")
         elif interaction.user.id == target.id:
             await interaction.followup.send('You can\'t pay yourself!', ephemeral=True)
             return
-        
+
         await profile.add_currency(-amount, 'wallet')
         await target_profile.add_currency(amount, 'wallet')
         await interaction.followup.send(f'You paid {amount} beans to {target.mention}')
 
 
-async def setup(bot):
+async def setup(bot: KidneyBot):
     await bot.add_cog(Economy(bot))

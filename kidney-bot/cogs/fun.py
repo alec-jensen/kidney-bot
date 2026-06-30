@@ -3,24 +3,26 @@
 # Full license at LICENSE.md
 
 import asyncio
-import discord
-from discord.ext import commands
-from discord import app_commands
-import random
-import aiohttp
 import logging
-import pilcord
-from bill import insult # shakespeare-insult
+import random
+
+import aiohttp
+import discord
 import wikipedia
+from bill import insult  # shakespeare-insult
+from discord import app_commands
+from discord.ext import commands
 from faker import Faker
-from faker.providers import internet, company, phone_number, passport, ssn
-from typing import Optional
+from faker.providers import company, internet, passport, phone_number, ssn
+
+from utils import pilcord
+from utils.kidney_bot import KidneyBot
 
 
 class Fun(commands.Cog):
 
-    def __init__(self, bot):
-        self.bot = bot
+    def __init__(self, bot: KidneyBot):
+        self.bot: KidneyBot = bot
         self.rps_scenarios = [
             ['D', 'L', 'W'],
             ['W', 'D', 'L'],
@@ -28,7 +30,7 @@ class Fun(commands.Cog):
         ]
         self.eightball_responses = ['indeed', 'undoubtedly', 'no', 'dunno', 'indecisive', 'idk', 'go away',
                                     'yes', 'nope', 'maybe', 'probably', 'probably not', "don't count on it", 'ask again later', "yesn't"]
-        
+
 
     @commands.Cog.listener()
     async def on_ready(self):
@@ -109,7 +111,7 @@ class Fun(commands.Cog):
     async def rps(self, interaction: discord.Interaction):
         await interaction.response.send_message('Send R for :rock:, send P for :scroll:, send S for :scissors:')
 
-        def check(m):
+        def check(m: discord.Message) -> bool:
             return m.content.lower() in ['r', 'p', 's'] and m.channel == interaction.channel and m.author == interaction.user
 
         message: discord.Message = await self.bot.wait_for('message', check=check, timeout=15)
@@ -119,9 +121,8 @@ class Fun(commands.Cog):
             if self.rps_scenarios[player][computer] == 'L':
                 if random.randint(0, 2) == 0:
                     break
-                else:
-                    continue
-            elif self.rps_scenarios[player][computer] in ['W', 'D']:
+                continue
+            if self.rps_scenarios[player][computer] in ['W', 'D']:
                 break
         # Check the table for the outcome
         outcome = self.rps_scenarios[player][computer]
@@ -161,15 +162,15 @@ class Fun(commands.Cog):
         if image is None:
             await interaction.followup.send('No valid image provided. Please provide a user, flag, or flag_url.', ephemeral=True)
             return
-        
+
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.fight_under_this_flag(), filename='fight_under_this_flag.png'))
 
     @app_commands.command(name='uwu_discord', description='uwu discord meme')
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
-    async def uwu_discord(self, interaction: discord.Interaction, user: Optional[discord.Member] = None,
-                          flag: Optional[discord.Attachment] = None, flag_url: Optional[str] = None):
+    async def uwu_discord(self, interaction: discord.Interaction, user: discord.Member | None = None,
+                          flag: discord.Attachment | None = None, flag_url: str | None = None):
         await interaction.response.defer()
         if user is None and flag is None and flag_url is None and interaction.user.avatar is not None:
             image = interaction.user.avatar.url
@@ -182,15 +183,15 @@ class Fun(commands.Cog):
         else:
             await interaction.followup.send('Something went wrong, please try again', ephemeral=True)
             return
-        
+
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.uwu_discord(), filename='uwu_discord.png'))
 
     @app_commands.command(name='rip', description='rip meme')
     @app_commands.allowed_installs(guilds=True, users=True)
     @app_commands.checks.cooldown(1, 5, key=lambda i: i.user.id)
-    async def rip(self, interaction: discord.Interaction, user: Optional[discord.Member] = None,
-                          flag: Optional[discord.Attachment] = None, flag_url: Optional[str] = None):
+    async def rip(self, interaction: discord.Interaction, user: discord.Member | None = None,
+                          flag: discord.Attachment | None = None, flag_url: str | None = None):
         await interaction.response.defer()
         if user is None and flag is None and flag_url is None and interaction.user.avatar is not None:
             image = interaction.user.avatar.url
@@ -203,7 +204,7 @@ class Fun(commands.Cog):
         else:
             await interaction.followup.send('Something went wrong, please try again', ephemeral=True)
             return
-        
+
         a = pilcord.Meme(avatar=image)
         await interaction.followup.send(file=discord.File(await a.rip(), filename='rip.png'))
 
@@ -248,13 +249,13 @@ class Fun(commands.Cog):
     async def wikipedia(self, interaction: discord.Interaction, query: str):
         await interaction.response.defer()
 
-        async def search(query):
+        async def search(query: str):
             page: wikipedia.WikipediaPage = await asyncio.to_thread(wikipedia.page, title=query)
             text = page.summary[:1000]
             if len(page.summary) > 1000:
                 text += '...'
             return page, text
-        
+
         try:
             page, text = await search(query)
         except wikipedia.exceptions.DisambiguationError as e:
@@ -262,7 +263,7 @@ class Fun(commands.Cog):
         except wikipedia.exceptions.PageError:
             await interaction.followup.send("Could not find that page.", ephemeral=True)
             return
-        
+
         embed = discord.Embed(title=page.title, description=text, url=page.url)
         embed.set_image(url=page.images[0])
         embed.set_footer(text=f"Requested by {interaction.user.name}", icon_url=interaction.user.display_avatar.url)
@@ -289,5 +290,5 @@ Passport Number: {fake.passport_number()}
 SSN: {fake.ssn()}""")
 
 
-async def setup(bot):
+async def setup(bot: KidneyBot):
     await bot.add_cog(Fun(bot))

@@ -1,9 +1,11 @@
-import discord
-from typing import Union, Optional, TypeVar, ParamSpec, Awaitable, Callable
+from collections.abc import Awaitable, Callable
+from typing import ParamSpec, TypeVar
 
-AnyUser = Union[discord.Member, discord.User]
-OptAnyUser = Optional[AnyUser]
+import discord
+
+AnyUser = discord.Member | discord.User
+OptAnyUser = AnyUser | None
 
 T = TypeVar("T")
 P = ParamSpec("P")
-AsyncFunction = Union[Callable[P, Awaitable[T]], Callable]
+AsyncFunction = Callable[P, Awaitable[T]] | Callable

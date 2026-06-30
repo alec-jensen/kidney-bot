@@ -1,149 +1,34 @@
-# Database wrapper for intellisense
+# Database wrapper
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
-import logging
-from typing import Any, Type, Union, TypedDict
-from pymongo import AsyncMongoClient
 import asyncio
+import logging
+from typing import Any, TypeVar, cast
+
+from pymongo import ASCENDING, AsyncMongoClient
+from pymongo.errors import OperationFailure
 
 from utils.cache import Cache
 
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-# TypedDict definitions for type-safe database document access
-class ActiveGuardSettingsDict(TypedDict, total=False):
-    guild_id: int
-    block_known_spammers: bool
-
-
-class AiDetectionDict(TypedDict, total=False):
-    guild: int
-    enabled: bool
-    TOXICITY: int
-    SEVERE_TOXICITY: int
-    IDENTITY_ATTACK: int
-    INSULT: int
-    PROFANITY: int
-    THREAT: int
-    FLIRTATION: int
-    OBSCENE: int
-    SPAM: int
-
-
-class AutoModSettingsDict(TypedDict, total=False):
-    guild: int
-    log_channel: int
-    whitelist: list[int]
-    permissions_timeout: int
-    permissions_timeout_whitelist: list[int]
-
-
-class CurrencyDict(TypedDict, total=False):
-    userID: str
-    wallet: str
-    bank: str
-    inventory: dict
-
-
-class ReportsDict(TypedDict, total=False):
-    report_id: str
-    reporter: int
-    time_reported: float
-    reported_user: int
-    reported_user_name: str
-    reason: str
-    attached_message: str
-    attached_message_attachments: list
-    report_status: str
-    handled_by: int
-
-
-class ScammerListDict(TypedDict, total=False):
-    user: int
-    time: int
-    reason: str
-
-
-class ServerBansDict(TypedDict, total=False):
-    id: int
-    name: str
-    owner: str
-    reason: str
-
-
-class RoleDict(TypedDict, total=False):
-    id: int
-    delay: int
-
-
-class AutoRoleSettingsDict(TypedDict, total=False):
-    guild: int
-    roles: list[RoleDict]
-    BotsGetRoles: bool
-
-
-class ExceptionSchemaDict(TypedDict, total=False):
-    user_id: int
-    always_report_errors: bool
-
-
-class UserConfigDict(TypedDict, total=False):
-    user_id: int
-    announce_level: int
-    ephemeral_moderation_messages: bool
-
-
-class GuildConfigDict(TypedDict, total=False):
-    guild_id: int
-    ephemeral_moderation_messages: bool
-    ephemeral_setting_overpowers_user_setting: bool
-
-
-class WarnDict(TypedDict, total=False):
-    reason: str
-    timestamp: int
-    moderator: int
-    id: str
-
-
-class WarnSchemaDict(TypedDict, total=False):
-    user_id: int
-    guild_id: int
-    warns: list[WarnDict]
-
-
-# Union types for flexible schema/dict document access
-ActiveGuardSettingsDocument = Union['Schemas.ActiveGuardSettings', ActiveGuardSettingsDict, None]
-AiDetectionDocument = Union['Schemas.AiDetection', AiDetectionDict, None]
-AutoModSettingsDocument = Union['Schemas.AutoModSettings', AutoModSettingsDict, None]
-CurrencyDocument = Union['Schemas.Currency', CurrencyDict, None]
-ReportsDocument = Union['Schemas.Reports', ReportsDict, None]
-ScammerListDocument = Union['Schemas.ScammerList', ScammerListDict, None]
-ServerBansDocument = Union['Schemas.ServerBans', ServerBansDict, None]
-RoleDocument = Union['Schemas.RoleSchema', RoleDict, None]
-AutoRoleSettingsDocument = Union['Schemas.AutoRoleSettings', AutoRoleSettingsDict, None]
-ExceptionSchemaDocument = Union['Schemas.ExceptionSchema', ExceptionSchemaDict, None]
-UserConfigDocument = Union['Schemas.UserConfig', UserConfigDict, None]
-GuildConfigDocument = Union['Schemas.GuildConfig', GuildConfigDict, None]
-WarnSchemaDocument = Union['Schemas.WarnSchema', WarnSchemaDict, None]
-
-
-def convert_except_none(value, type, default=None, error=True) -> Any:
+def convert_except_none(value: Any, type: type[Any], default: Any = None, error: bool = True) -> Any:
     if value is None:
         return None
-
     try:
         return type(value)
-    except ValueError:
+    except (ValueError, TypeError):
         if error:
-            raise ValueError(f'Could not convert {value} to {type}')
-        else:
-            return default
+            raise ValueError(f'Could not convert {value!r} to {type}')
+        return default
 
 
 def remove_none_values(dictionary: dict) -> dict:
-    return {key: value for key, value in dictionary.items() if value is not None}
+    return {k: v for k, v in dictionary.items() if v is not None}
 
+
+# ── Schemas ───────────────────────────────────────────────────────────────────
 
 class Schemas:
     class BaseSchema:
@@ -151,239 +36,102 @@ class Schemas:
             pass
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.BaseSchema':
-            raise NotImplementedError(
-                'This method must be implemented in a subclass.')
+        def from_dict(cls, data: dict | None) -> 'Schemas.BaseSchema':
+            raise NotImplementedError
 
         def to_dict(self) -> dict:
-            raise NotImplementedError(
-                'This method must be implemented in a subclass.')
+            raise NotImplementedError
 
         def __str__(self) -> str:
-            string_repr = self.__class__.__name__ + '('
-            items = []
-            for key, value in self.to_dict().items():
-                items.append(f'{key}={value}')
-
-            string_repr = string_repr + ', '.join(items)
-            string_repr = string_repr + ')'
-            return string_repr
+            d = self.to_dict()
+            inner = ', '.join(f'{k}={v}' for k, v in d.items())
+            return f'{self.__class__.__name__}({inner})'
 
         def __repr__(self) -> str:
             return self.__str__()
 
         def __iter__(self):
-            for key, value in self.to_dict().items():
-                yield key, value
+            yield from self.to_dict().items()
 
         def __getitem__(self, key: str) -> Any:
             return getattr(self, key)
 
-    class ActiveGuardSettings(BaseSchema):
-        def __init__(self, guild_id: int | None = None, block_known_spammers: bool | None = None) -> None:
-            self.guild_id: int | None = convert_except_none(guild_id, int)
-            self.block_known_spammers: bool | None = convert_except_none(
-                block_known_spammers, bool)
-
-        @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.ActiveGuardSettings':
-            if data is None:
-                return cls()
-
-            return cls(data.get("guild_id"), data.get("block_known_spammers"))
-
-        def to_dict(self) -> dict:
-            return remove_none_values({
-                'guild_id': self.guild_id,
-                'block_known_spammers': self.block_known_spammers
-            })
-
-    class AiDetection(BaseSchema):
-        def __init__(self, guild: int | None = None, enabled: bool | None = None,
-                     TOXICITY: int | None = None, SEVERE_TOXICITY: int | None = None,
-                     IDENTITY_ATTACK: int | None = None, INSULT: int | None = None,
-                     PROFANITY: int | None = None, THREAT: int | None = None,
-                     FLIRTATION: int | None = None, OBSCENE: int | None = None,
-                     SPAM: int | None = None) -> None:
-            self.guild: int | None = convert_except_none(guild, int)
-            self.enabled: bool | None = convert_except_none(enabled, bool)
-            self.TOXICITY: int | None = convert_except_none(TOXICITY, int)
-            self.SEVERE_TOXICITY: int | None = convert_except_none(
-                SEVERE_TOXICITY, int)
-            self.IDENTITY_ATTACK: int | None = convert_except_none(
-                IDENTITY_ATTACK, int)
-            self.INSULT: int | None = convert_except_none(INSULT, int)
-            self.PROFANITY: int | None = convert_except_none(PROFANITY, int)
-            self.THREAT: int | None = convert_except_none(THREAT, int)
-            self.FLIRTATION: int | None = convert_except_none(FLIRTATION, int)
-            self.OBSCENE: int | None = convert_except_none(OBSCENE, int)
-            self.SPAM: int | None = convert_except_none(SPAM, int)
-
-        @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.AiDetection':
-            if data is None:
-                return cls()
-
-            return cls(data.get('guild'), data.get('enabled'),
-                       data.get('TOXICITY'), data.get(
-                           'SEVERE_TOXICITY'), data.get('IDENTITY_ATTACK'),
-                       data.get('INSULT'), data.get(
-                           'PROFANITY'), data.get('THREAT'),
-                       data.get('FLIRTATION'), data.get('OBSCENE'), data.get('SPAM'))
-
-        def to_dict(self) -> dict:
-            return remove_none_values({
-                'guild': self.guild,
-                'enabled': self.enabled,
-                'TOXICITY': self.TOXICITY,
-                'SEVERE_TOXICITY': self.SEVERE_TOXICITY,
-                'IDENTITY_ATTACK': self.IDENTITY_ATTACK,
-                'INSULT': self.INSULT,
-                'PROFANITY': self.PROFANITY,
-                'THREAT': self.THREAT,
-                'FLIRTATION': self.FLIRTATION,
-                'OBSCENE': self.OBSCENE,
-                'SPAM': self.SPAM
-            })
-
     class AutoModSettings(BaseSchema):
-        def __init__(self, guild: int | None = None, log_channel: int | None = None, whitelist: list[int] | None = None,
-                     permissions_timeout: int | None = None, permissions_timeout_whitelist: list[int] | None = None) -> None:
-            self.guild: int | None = convert_except_none(guild, int)
-            self.log_channel: int | None = convert_except_none(
-                log_channel, int)
-            self.whitelist: list[int] | None = convert_except_none(
-                whitelist, list)
-            self.permissions_timeout: int | None = convert_except_none(
-                permissions_timeout, int)
-            self.permissions_timeout_whitelist: list[int] | None = convert_except_none(
-                permissions_timeout_whitelist, list)
+        def __init__(self, guild_id: int | None = None, log_channel: int | None = None,
+                     whitelist: list[int] | None = None) -> None:
+            self.guild_id: int | None = convert_except_none(guild_id, int)
+            self.log_channel: int | None = convert_except_none(log_channel, int)
+            self.whitelist: list[int] | None = convert_except_none(whitelist, list)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.AutoModSettings':
+        def from_dict(cls, data: dict | None) -> 'Schemas.AutoModSettings':
             if data is None:
                 return cls()
-
-            return cls(data.get('guild'), data.get('log_channel'),
-                       data.get('whitelist'), data.get('permissions_timeout'),
-                       data.get('permissions_timeout_whitelist'))
+            guild_id = data.get('guild_id') or data.get('guild')
+            return cls(guild_id, data.get('log_channel'), data.get('whitelist'))
 
         def to_dict(self) -> dict:
             return remove_none_values({
-                'guild': self.guild,
-                'log_channel': self.log_channel,
+                'guild_id': self.guild_id, 'log_channel': self.log_channel,
                 'whitelist': self.whitelist,
-                'permissions_timeout': self.permissions_timeout,
-                'permissions_timeout_whitelist': self.permissions_timeout_whitelist
             })
 
-    # For whatever reason, all of these are strings
     class Currency(BaseSchema):
-        def __init__(self, userID: str | None = None, wallet: str | None = None,
-                     bank: str | None = None, inventory: dict | None = None) -> None:
-            self.userID: str | None = convert_except_none(userID, str)
-            self.wallet: str | None = convert_except_none(wallet, str)
-            self.bank: str | None = convert_except_none(bank, str)
+        def __init__(self, user_id: str | None = None, wallet: int | None = None,
+                     bank: int | None = None, inventory: dict | None = None) -> None:
+            self.user_id: str | None = convert_except_none(user_id, str)
+            self.wallet: int | None = convert_except_none(wallet, int)
+            self.bank: int | None = convert_except_none(bank, int)
             self.inventory: dict | None = inventory
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.Currency':
+        def from_dict(cls, data: dict | None) -> 'Schemas.Currency':
+            # support legacy 'userID' field name
             if data is None:
                 return cls()
-
-            return cls(data.get('userID'), data.get('wallet'), data.get('bank'), data.get('inventory'))
+            user_id = data.get('user_id') or data.get('userID')
+            return cls(user_id, data.get('wallet'), data.get('bank'), data.get('inventory'))
 
         def to_dict(self) -> dict:
             return remove_none_values({
-                'userID': self.userID,
-                'wallet': self.wallet,
-                'bank': self.bank,
-                'inventory': self.inventory
-            })
-
-    class Reports(BaseSchema):
-        def __init__(self, report_id: str | None = None, reporter: int | None = None, time_reported: float | None = None,
-                     reported_user: int | None = None, reported_user_name: str | None = None, reason: str | None = None,
-                     attached_message: str | None = None, attached_message_attachments: list | None = None,
-                     report_status: str | None = None, handled_by: int | None = None) -> None:
-            self.report_id: str | None = convert_except_none(report_id, str)
-            self.reporter: int | None = convert_except_none(reporter, int)
-            self.time_reported: float | None = convert_except_none(
-                time_reported, float)
-            self.reported_user: int | None = convert_except_none(
-                reported_user, int)
-            self.reported_user_name: str | None = convert_except_none(
-                reported_user_name, str)
-            self.reason: str | None = convert_except_none(reason, str)
-            self.attached_message: str | None = convert_except_none(
-                attached_message, str)
-            self.attached_message_attachments: list | None = attached_message_attachments
-            self.report_status: str | None = convert_except_none(
-                report_status, str)
-            self.handled_by: int | None = convert_except_none(handled_by, int)
-
-        @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.Reports':
-            if data is None:
-                return cls()
-
-            return cls(data.get('report_id'), data.get('reporter'), data.get('time_reported'), data.get('reported_user'), data.get('reported_user_name'), data.get('reason'), data.get('attached_message'), data.get('attached_message_attachments'), data.get('report_status'), data.get('handled_by'))
-
-        def to_dict(self) -> dict:
-            return remove_none_values({
-                'report_id': self.report_id,
-                'reporter': self.reporter,
-                'time_reported': self.time_reported,
-                'reported_user': self.reported_user,
-                'reported_user_name': self.reported_user_name,
-                'reason': self.reason,
-                'attached_message': self.attached_message,
-                'attached_message_attachments': self.attached_message_attachments,
-                'report_status': self.report_status,
-                'handled_by': self.handled_by
+                'user_id': self.user_id, 'wallet': self.wallet,
+                'bank': self.bank, 'inventory': self.inventory,
             })
 
     class ScammerList(BaseSchema):
-        def __init__(self, user: int | None = None, time: int | None = None, reason: str | None = None) -> None:
-            self.user: int | None = convert_except_none(user, int)
+        def __init__(self, user_id: int | None = None, time: int | None = None,
+                     reason: str | None = None) -> None:
+            self.user_id: int | None = convert_except_none(user_id, int)
             self.time: int | None = convert_except_none(time, int)
             self.reason: str | None = convert_except_none(reason, str)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.ScammerList':
+        def from_dict(cls, data: dict | None) -> 'Schemas.ScammerList':
+            # support legacy 'user' field name
             if data is None:
                 return cls()
-
-            return cls(data.get('user'), data.get('time'), data.get('reason'))
+            user_id = data.get('user_id') or data.get('user')
+            return cls(user_id, data.get('time'), data.get('reason'))
 
         def to_dict(self) -> dict:
-            return remove_none_values({
-                'user': self.user,
-                'time': self.time,
-                'reason': self.reason
-            })
+            return remove_none_values({'user_id': self.user_id, 'time': self.time, 'reason': self.reason})
 
     class ServerBans(BaseSchema):
-        def __init__(self, id: int | None = None, name: int | None = None, owner: int | None = None, reason: str | None = None) -> None:
+        def __init__(self, id: int | None = None, name: int | None = None,
+                     owner: int | None = None, reason: str | None = None) -> None:
             self.id: int | None = convert_except_none(id, int)
             self.name: int | None = convert_except_none(name, int)
             self.owner: int | None = convert_except_none(owner, int)
             self.reason: str | None = convert_except_none(reason, str)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.ServerBans':
+        def from_dict(cls, data: dict | None) -> 'Schemas.ServerBans':
             if data is None:
                 return cls()
-
             return cls(data.get('id'), data.get('name'), data.get('owner'), data.get('reason'))
 
         def to_dict(self) -> dict:
-            return remove_none_values({
-                'id': self.id,
-                'name': self.name,
-                'owner': self.owner,
-                'reason': self.reason
-            })
+            return remove_none_values({'id': self.id, 'name': self.name, 'owner': self.owner, 'reason': self.reason})
 
     class RoleSchema(BaseSchema):
         def __init__(self, id: int | None = None, delay: int | None = None) -> None:
@@ -391,273 +139,334 @@ class Schemas:
             self.delay: int | None = convert_except_none(delay, int)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.RoleSchema':
+        def from_dict(cls, data: dict | None) -> 'Schemas.RoleSchema':
             if data is None:
                 return cls()
-
             return cls(data.get('id'), data.get('delay'))
 
         def to_dict(self) -> dict:
-            return remove_none_values({
-                'id': self.id,
-                'delay': self.delay
-            })
+            return remove_none_values({'id': self.id, 'delay': self.delay})
 
     class AutoRoleSettings(BaseSchema):
-        def __init__(self, guild: int | None = None, roles: list['Schemas.RoleSchema'] | None = None, bots_get_roles: bool | None = None) -> None:
-            self.guild: int | None = convert_except_none(guild, int)
-            self.roles: list['Schemas.RoleSchema'] | None = roles
-            self.bots_get_roles: bool | None = convert_except_none(
-                bots_get_roles, bool)
+        def __init__(self, guild_id: int | None = None,
+                     roles: list | None = None,
+                     bots_get_roles: bool | None = None) -> None:
+            self.guild_id: int | None = convert_except_none(guild_id, int)
+            self.roles: list | None = roles
+            self.bots_get_roles: bool | None = convert_except_none(bots_get_roles, bool)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.AutoRoleSettings':
+        def from_dict(cls, data: dict | None) -> 'Schemas.AutoRoleSettings':
             if data is None:
                 return cls()
-
-            return cls(data.get('guild'), data.get('roles'), data.get('BotsGetRoles'))
+            guild_id = data.get('guild_id') or data.get('guild')
+            # support legacy 'BotsGetRoles' field name
+            bots_get_roles = data.get('bots_get_roles') if data.get('bots_get_roles') is not None else data.get('BotsGetRoles')
+            return cls(guild_id, data.get('roles'), bots_get_roles)
 
         def to_dict(self) -> dict:
             return remove_none_values({
-                'guild': self.guild,
+                'guild_id': self.guild_id,
                 'roles': self.roles,
-                'BotsGetRoles': self.bots_get_roles
+                'bots_get_roles': self.bots_get_roles,
             })
 
     class ExceptionSchema(BaseSchema):
         def __init__(self, user_id: int | None = None, always_report_errors: bool | None = None) -> None:
             self.user_id: int | None = convert_except_none(user_id, int)
-            self.always_report_errors: bool | None = convert_except_none(
-                always_report_errors, bool)
+            self.always_report_errors: bool | None = convert_except_none(always_report_errors, bool)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.ExceptionSchema':
+        def from_dict(cls, data: dict | None) -> 'Schemas.ExceptionSchema':
             if data is None:
                 return cls()
-
             return cls(data.get('user_id'), data.get('always_report_errors'))
 
         def to_dict(self) -> dict:
-            return remove_none_values({
-                'user_id': self.user_id,
-                'always_report_errors': self.always_report_errors
-            })
+            return remove_none_values({'user_id': self.user_id, 'always_report_errors': self.always_report_errors})
 
     class UserConfig(BaseSchema):
-        def __init__(self, user_id: int | None = None, announce_level: int | None = None, ephemeral_moderation_messages: bool | None = None) -> None:
+        def __init__(self, user_id: int | None = None, announce_level: int | None = None,
+                     ephemeral_moderation_messages: bool | None = None) -> None:
             self.user_id: int | None = convert_except_none(user_id, int)
-            self.announce_level: int | None = convert_except_none(
-                announce_level, int)
-            self.ephemeral_moderation_messages: bool | None = convert_except_none(
-                ephemeral_moderation_messages, bool)
+            self.announce_level: int | None = convert_except_none(announce_level, int)
+            self.ephemeral_moderation_messages: bool | None = convert_except_none(ephemeral_moderation_messages, bool)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.UserConfig':
+        def from_dict(cls, data: dict | None) -> 'Schemas.UserConfig':
             if data is None:
                 return cls()
-
             return cls(data.get('user_id'), data.get('announce_level'), data.get('ephemeral_moderation_messages'))
 
         def to_dict(self) -> dict:
             return remove_none_values({
-                'user_id': self.user_id,
-                'announce_level': self.announce_level,
-                'ephemeral_moderation_messages': self.ephemeral_moderation_messages
+                'user_id': self.user_id, 'announce_level': self.announce_level,
+                'ephemeral_moderation_messages': self.ephemeral_moderation_messages,
             })
 
     class GuildConfig(BaseSchema):
-        def __init__(self, guild_id: int | None = None, ephemeral_moderation_messages: bool | None = None, ephemeral_setting_overpowers_user_setting: bool | None = None) -> None:
+        def __init__(self, guild_id: int | None = None,
+                     ephemeral_moderation_messages: bool | None = None,
+                     ephemeral_setting_overpowers_user_setting: bool | None = None) -> None:
             self.guild_id: int | None = convert_except_none(guild_id, int)
-            self.ephemeral_moderation_messages: bool | None = convert_except_none(
-                ephemeral_moderation_messages, bool)
+            self.ephemeral_moderation_messages: bool | None = convert_except_none(ephemeral_moderation_messages, bool)
             self.ephemeral_setting_overpowers_user_setting: bool | None = convert_except_none(
                 ephemeral_setting_overpowers_user_setting, bool)
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.GuildConfig':
+        def from_dict(cls, data: dict | None) -> 'Schemas.GuildConfig':
             if data is None:
                 return cls()
-
-            return cls(data.get('guild_id'), data.get('ephemeral_moderation_messages'), data.get('ephemeral_setting_overpowers_user_setting'))
+            return cls(data.get('guild_id'), data.get('ephemeral_moderation_messages'),
+                       data.get('ephemeral_setting_overpowers_user_setting'))
 
         def to_dict(self) -> dict:
             return remove_none_values({
                 'guild_id': self.guild_id,
                 'ephemeral_moderation_messages': self.ephemeral_moderation_messages,
-                'ephemeral_setting_overpowers_user_setting': self.ephemeral_setting_overpowers_user_setting
+                'ephemeral_setting_overpowers_user_setting': self.ephemeral_setting_overpowers_user_setting,
             })
-        
+
     class WarnSchema(BaseSchema):
-        """dict: {
-            reason: str,
-            timestamp: int,
-            moderator: int,
-            id: str
-        }"""
-        def __init__(self, user_id: int | None = None, guild_id: int | None = None, warns: list[dict] | None = None) -> None:
+        def __init__(self, user_id: int | None = None, guild_id: int | None = None,
+                     warns: list[dict] | None = None) -> None:
             self.user_id: int | None = convert_except_none(user_id, int)
             self.guild_id: int | None = convert_except_none(guild_id, int)
             self.warns: list[dict] | None = warns
 
         @classmethod
-        def from_dict(cls, data: dict) -> 'Schemas.WarnSchema':
+        def from_dict(cls, data: dict | None) -> 'Schemas.WarnSchema':
             if data is None:
                 return cls()
-
             return cls(data.get('user_id'), data.get('guild_id'), data.get('warns'))
-        
+
         def to_dict(self) -> dict:
-            return remove_none_values({
-                'user_id': self.user_id,
-                'guild_id': self.guild_id,
-                'warns': self.warns
+            return remove_none_values({'user_id': self.user_id, 'guild_id': self.guild_id, 'warns': self.warns})
+
+    class MusicQueue(BaseSchema):
+        def __init__(self, guild_id: int | None = None, voice_channel_id: int | None = None,
+                     text_channel_id: int | None = None, current: dict | None = None,
+                     queue: list | None = None, loop_mode: str | None = None,
+                     volume: float | None = None) -> None:
+            self.guild_id: int | None = convert_except_none(guild_id, int)
+            self.voice_channel_id: int | None = convert_except_none(voice_channel_id, int)
+            self.text_channel_id: int | None = convert_except_none(text_channel_id, int)
+            self.current: dict | None = current
+            self.queue: list = queue if queue is not None else []
+            self.loop_mode: str | None = convert_except_none(loop_mode, str)
+            self.volume: float | None = convert_except_none(volume, float)
+
+        @classmethod
+        def from_dict(cls, data: dict | None) -> 'Schemas.MusicQueue':
+            if data is None:
+                return cls()
+            return cls(data.get('guild_id'), data.get('voice_channel_id'), data.get('text_channel_id'),
+                       data.get('current'), data.get('queue', []), data.get('loop_mode'), data.get('volume'))
+
+        def to_dict(self) -> dict:
+            d = remove_none_values({
+                'guild_id': self.guild_id, 'voice_channel_id': self.voice_channel_id,
+                'text_channel_id': self.text_channel_id, 'current': self.current,
+                'loop_mode': self.loop_mode, 'volume': self.volume,
             })
+            d['queue'] = self.queue
+            return d
 
 
-class Collection:
-    """Wrapper for motor.motor_asyncio.AsyncIOMotorCollection. If a schema is provided, all queries will be converted to the schema."""
+T = TypeVar('T', bound=Schemas.BaseSchema)
 
-    def __init__(self, database: 'Database', collection: Any, schema: Type[Schemas.BaseSchema] | None = None) -> None:
+
+# ── Collection ────────────────────────────────────────────────────────────────
+
+class Collection[T: Schemas.BaseSchema]:
+    """Typed async wrapper around a pymongo collection with an O(1) pk cache.
+
+    All methods accept and return schema objects — raw dicts never leave this class.
+    """
+
+    def __init__(self, collection: Any, primary_key: str,
+                 schema_class: type[T],
+                 cache_ttl: int = 300,
+                 legacy_pk: str | None = None) -> None:
         self.collection = collection
-        self.schema: Type[Schemas.BaseSchema] | None = schema
-        self.database = database
-        self.cache = Cache(60*5)
+        self._pk = primary_key
+        self._legacy_pk = legacy_pk
+        self._schema: type[T] = schema_class
+        self.cache: Cache = Cache(primary_key, ttl=cache_ttl)
 
-        asyncio.create_task(self.cache.cleanup_task())
+    def _from_doc(self, doc: dict) -> T:
+        return cast(T, self._schema.from_dict(doc))
 
-    """Find one document in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find_one(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> dict | Schemas.BaseSchema | None:
-        if isinstance(query, Schemas.BaseSchema):
-            query = query.to_dict()
+    async def get(self, pk_value: Any, **extra_filters: Any) -> T | None:
+        """Return the schema for this primary key, or None if not found."""
+        query = {self._pk: pk_value, **extra_filters}
 
-        document = await self.cache.get_one(query)
-        if document is None:
-            document = await self.collection.find_one(query)
-            if document is not None:
-                await self.cache.add(document)
+        # Only use the cache for simple pk-only lookups
+        if not extra_filters:
+            cached = self.cache.get_one(query)
+            if cached is not None:
+                return self._from_doc(cached)
 
-        if schema is None:
-            schema = self.schema
+        doc = await self.collection.find_one(query)
 
-        if document is None:
+        if doc is None and self._legacy_pk and not extra_filters:
+            doc = await self.collection.find_one({self._legacy_pk: pk_value})
+
+        if doc is None:
             return None
+        if not extra_filters:
+            self.cache.add(doc)
+        return self._from_doc(doc)
 
-        if schema is None:
-            return document
+    async def all(self, limit: int = 1000) -> list[T]:
+        """Return all documents in the collection as schema objects."""
+        cursor = self.collection.find({})
+        if limit:
+            cursor = cursor.limit(limit)
+        docs = await cursor.to_list(length=limit)
+        self.cache.add_many(docs)
+        return [self._from_doc(d) for d in docs]
 
-        return schema.from_dict(document)
+    async def save(self, schema: T) -> None:
+        """Upsert by primary key. Migrates legacy field names on first write."""
+        doc = schema.to_dict()
+        pk_val = doc.get(self._pk)
 
-    """Find all documents in the collection. If a schema is provided, it will be converted to the schema."""
-    async def find(self, query: Schemas.BaseSchema | dict, schema: Type[Schemas.BaseSchema] | None = None) -> list[dict] | list[Schemas.BaseSchema]:
-        if isinstance(query, Schemas.BaseSchema):
-            query = query.to_dict()
+        existing_id = None
+        existing = await self.collection.find_one({self._pk: pk_val})
+        if existing is None and self._legacy_pk:
+            existing = await self.collection.find_one({self._legacy_pk: pk_val})
+        if existing is not None:
+            existing_id = existing['_id']
 
-        documents = self.collection.find(query)
-        documents = await documents.to_list(length=None)
-        await self.cache.add_many(documents)
+        if existing_id is not None:
+            await self.collection.replace_one({'_id': existing_id}, doc)
+        else:
+            await self.collection.insert_one(doc)
 
-        if schema is None:
-            schema = self.schema
+        self.cache.add(doc)
 
-        if schema is None:
-            return documents
+    async def delete(self, pk_value: Any, **extra_filters: Any) -> None:
+        """Delete by primary key."""
+        query = {self._pk: pk_value, **extra_filters}
+        result = await self.collection.delete_one(query)
+        if result.deleted_count == 0 and self._legacy_pk and not extra_filters:
+            await self.collection.delete_one({self._legacy_pk: pk_value})
+        self.cache.remove({self._pk: pk_value})
 
-        # type: ignore
-        return [schema.from_dict(document) for document in documents]
+    async def exists(self, pk_value: Any, **extra_filters: Any) -> bool:
+        return await self.get(pk_value, **extra_filters) is not None
 
-    """Update one document in the collection."""
-    async def update_one(self, query: dict | Schemas.BaseSchema, update: dict, upsert: bool = False) -> None:
-        if isinstance(query, Schemas.BaseSchema):
-            query = query.to_dict()
+    async def count(self, **filters: Any) -> int:
+        return await self.collection.count_documents(filters)
 
-        await self.collection.update_one(query, update, upsert=upsert)
+    async def query_one(self, filter_dict: dict) -> T | None:
+        """Escape hatch for complex queries. Returns a schema object."""
+        doc = await self.collection.find_one(filter_dict)
+        if doc is None:
+            return None
+        return self._from_doc(doc)
 
-        asyncio.create_task(self.cache.update(query, update))
+    async def query_many(self, filter_dict: dict, limit: int = 1000) -> list[T]:
+        """Escape hatch for complex queries. Returns a list of schema objects."""
+        cursor = self.collection.find(filter_dict)
+        if limit:
+            cursor = cursor.limit(limit)
+        docs = await cursor.to_list(length=limit)
+        return [self._from_doc(d) for d in docs]
 
-    """Delete one document in the collection."""
-    async def delete_one(self, query: dict | Schemas.BaseSchema) -> None:
-        if isinstance(query, Schemas.BaseSchema):
-            query = query.to_dict()
 
-        await self.collection.delete_one(query)
-
-        asyncio.create_task(self.cache.remove(query))
-
-    """Insert one document in the collection."""
-    async def insert_one(self, document: dict | Schemas.BaseSchema) -> None:
-        if isinstance(document, Schemas.BaseSchema):
-            document = document.to_dict()
-
-        await self.collection.insert_one(document)
-
-        asyncio.create_task(self.cache.add(document))
-
-    """Count the number of documents in the collection."""
-    async def count_documents(self, query: dict | Schemas.BaseSchema) -> int:
-        if isinstance(query, Schemas.BaseSchema):
-            query = query.to_dict()
-
-        return await self.collection.count_documents(query)
-
+# ── Database ──────────────────────────────────────────────────────────────────
 
 class Database:
     def __init__(self, dbstring: str) -> None:
-        self.dbstring: str = dbstring
-
+        self.dbstring = dbstring
         self.connected = False
-
-        self.collections = []
+        self._cleanup_task: asyncio.Task | None = None
 
     async def connect(self) -> None:
         if self.connected:
             return
 
-        logging.info(f'Connecting to database.')
+        logging.info('Connecting to database.')
         self.client: AsyncMongoClient = AsyncMongoClient(
             self.dbstring, serverSelectionTimeoutMS=5000)
 
         try:
             await self.client.server_info()
         except Exception as e:
-            logging.critical(f'Failed to connect to database.')
+            logging.critical('Failed to connect to database.')
             raise e
 
-        logging.info(f'Connected to database.')
-
+        logging.info('Connected to database.')
         self.connected = True
 
-        self.database = self.client.data
+        db = self.client.data
 
-        self.active_guard_settings = Collection(
-            self, self.database.active_guard_settings)
+        self.automodsettings: Collection[Schemas.AutoModSettings] = Collection(
+            db.automodsettings, 'guild_id', Schemas.AutoModSettings, legacy_pk='guild')
+        self.currency: Collection[Schemas.Currency] = Collection(
+            db.currency, 'user_id', Schemas.Currency, legacy_pk='userID')
+        self.scammer_list: Collection[Schemas.ScammerList] = Collection(
+            db.scammer_list, 'user_id', Schemas.ScammerList, legacy_pk='user')
+        self.serverbans: Collection[Schemas.ServerBans] = Collection(
+            db.serverbans, 'id', Schemas.ServerBans)
+        self.autorolesettings: Collection[Schemas.AutoRoleSettings] = Collection(
+            db.autorolesettings, 'guild_id', Schemas.AutoRoleSettings, legacy_pk='guild')
+        self.exceptions: Collection[Schemas.ExceptionSchema] = Collection(
+            db.exceptions, 'user_id', Schemas.ExceptionSchema)
+        self.user_config: Collection[Schemas.UserConfig] = Collection(
+            db.user_config, 'user_id', Schemas.UserConfig)
+        self.guild_config: Collection[Schemas.GuildConfig] = Collection(
+            db.guild_config, 'guild_id', Schemas.GuildConfig)
+        self.warnings: Collection[Schemas.WarnSchema] = Collection(
+            db.warnings, 'user_id', Schemas.WarnSchema)
+        self.music_queues: Collection[Schemas.MusicQueue] = Collection(
+            db.music_queues, 'guild_id', Schemas.MusicQueue)
 
-        self.ai_detection = Collection(self, self.database.ai_detection)
+        self.collections: list[Collection] = [
+            self.automodsettings,
+            self.currency, self.scammer_list, self.serverbans,
+            self.autorolesettings, self.exceptions, self.user_config,
+            self.guild_config, self.warnings, self.music_queues,
+        ]
 
-        self.automodsettings = Collection(self, self.database.automodsettings)
+        await self._ensure_indexes(db)
+        self._cleanup_task = asyncio.create_task(self._cache_cleanup_loop())
 
-        self.currency = Collection(self, self.database.currency)
+    @staticmethod
+    async def _create_index(collection: Any, keys: Any, **options: Any) -> None:
+        """Create an index, recreating it if a prior run left an incompatible
+        definition (e.g. non-sparse before legacy documents were accounted for)."""
+        key_spec = [(keys, ASCENDING)] if isinstance(keys, str) else list(keys)
+        try:
+            await collection.create_index(keys, **options)
+        except OperationFailure as e:
+            if e.code in (85, 86):  # IndexOptionsConflict / IndexKeySpecsConflict
+                async for index in await collection.list_indexes():
+                    if list(index["key"].items()) == key_spec:
+                        await collection.drop_index(index["name"])
+                        break
+                await collection.create_index(keys, **options)
+            else:
+                raise
 
-        self.reports = Collection(self, self.database.reports)
+    async def _ensure_indexes(self, db: Any) -> None:
+        # sparse=True so legacy documents that still use the old field names
+        # (and therefore lack the new primary key field) don't collide on a
+        # shared `null` value when the unique index is built.
+        await self._create_index(db.automodsettings, 'guild_id', unique=True, sparse=True)
+        await self._create_index(db.autorolesettings, 'guild_id', unique=True, sparse=True)
+        await self._create_index(db.guild_config, 'guild_id', unique=True, sparse=True)
+        await self._create_index(db.currency, 'user_id', unique=True, sparse=True)
+        await self._create_index(db.scammer_list, 'user_id', unique=True, sparse=True)
+        await self._create_index(db.user_config, 'user_id', unique=True, sparse=True)
+        await self._create_index(db.exceptions, 'user_id', unique=True, sparse=True)
+        await self._create_index(db.warnings, [('user_id', ASCENDING), ('guild_id', ASCENDING)])
+        await self._create_index(db.music_queues, 'guild_id', unique=True, sparse=True)
 
-        self.scammer_list = Collection(self, self.database.scammer_list)
-
-        self.serverbans = Collection(self, self.database.serverbans, Schemas.ServerBans)
-
-        self.autorolesettings = Collection(
-            self, self.database.autorolesettings)
-
-        self.exceptions = Collection(self, self.database.exceptions)
-
-        self.user_config = Collection(
-            self, self.database.user_config, Schemas.UserConfig)
-
-        self.guild_config = Collection(
-            self, self.database.guild_config, Schemas.GuildConfig)
-        
-        self.warnings = Collection(self, self.database.warnings, Schemas.WarnSchema)
-
-        self.music_queues = Collection(self, self.database.music_queues)
-
-        self.collections = [self.active_guard_settings, self.ai_detection, self.automodsettings, self.currency, self.reports,
-                            self.scammer_list, self.serverbans, self.autorolesettings, self.exceptions, self.user_config, self.guild_config,
-                            self.warnings, self.music_queues]
+    async def _cache_cleanup_loop(self) -> None:
+        while True:
+            await asyncio.sleep(60)
+            for col in self.collections:
+                col.cache.cleanup()

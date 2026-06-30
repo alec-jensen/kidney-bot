@@ -1,24 +1,106 @@
-# kidney bot is slowly transitioning to storing all strings in lang files like this one
-# this is to make it easier to translate the bot into other languages
+# kidney bot language file
+# Placeholders use Python's str.format syntax: {key}
+# NOTE: This file is a work in progress and will expand as more strings are added.
 
-# NOTE: This file is not complete. It is a work in progress. This file will be updated as more strings are added.
+common:
+  guild_only: "This command can only be used in a server."
+  member_context_required: "This command requires server member context."
+  missing_permissions: "Missing required permissions. Is the user above me?"
+  something_went_wrong: "Something went wrong, please try again."
+  invalid_number: "You cannot input invalid numbers."
 
 main:
   createinvite:
     reason: "Bot developer requested invite link"
     couldnt_create_invite: "Couldn't create invite link. Please check console for errors."
-  
+
   couldnt_reload_config: "Couldn't reload config. Please check console for errors."
   reloaded_config: "Config reloaded."
 
-  # %cog% is the name of the cog
-  loaded_cog: "Loaded cog %cog%."
-  couldnt_load_cog: "Couldn't load cog %cog%. %error%"
-  unloaded_cog: "Unloaded cog %cog%."
-  couldnt_unload_cog: "Couldn't unload cog %cog%. %error%"
-  
-  reloaded_cog: "Reloaded cog %cog%."
+  loaded_cog: "Loaded cog {cog}."
+  couldnt_load_cog: "Couldn't load cog {cog}. {error}"
+  unloaded_cog: "Unloaded cog {cog}."
+  couldnt_unload_cog: "Couldn't unload cog {cog}. {error}"
+  reloaded_cog: "Reloaded cog {cog}."
+
+automod:
+  guild_only: "This command can only be used in a server."
+  no_value: "Invalid arguments. Please provide a value."
+  invalid_sensitivity: "Invalid value. Value must be between 0 and 100."
+  no_option_or_value: "Invalid arguments. Please provide an option and value."
+  ai_detection_disabled: "AI Detection is disabled."
+  no_user_or_channel: "Invalid arguments. Please provide a user or channel."
+  user_and_channel: "Invalid arguments. Please provide a user or channel, not both."
+  settings_updated: "Settings updated."
+  cleared: "Cleared."
+
+moderation:
+  muted_role_not_found: "Muted role not found. Please create a \"Muted\" role."
+  invalid_time: "Invalid time!"
+  timeout_too_long: "Timeouts can only be 2 weeks max!"
+  warn_not_found: "Warn not found."
+  user_id_not_found: "User ID not found."
+  warnings_cleared: "Warnings cleared."
+  no_warnings: "This user has no warnings."
+  warn_deleted: "Warn deleted."
+  messages_too_old: "You can only delete messages up to 7 days old."
+  banned: "{user} has been banned."
+  unbanned: "{user} has been unbanned."
+  kicked: "{user} has been kicked."
+  muted: "{user} has been muted."
+  unmuted: "{user} has been unmuted."
+  warned: "{user} has been warned. This is warning #{count}."
+  timed_out: "{user} has been timed out for {duration}."
+
+music:
+  not_same_channel: "You must be in the same channel."
+  not_connected: "Not connected."
+  nothing_playing: "Nothing is playing."
+  queue_empty: "The queue is empty."
+  added_to_queue: "Added to queue: {title}"
+  now_playing: "Now playing: {title}"
+  volume_set: "Volume set to {volume}%."
+  volume_invalid: "Volume must be between 0 and 100."
+  paused: "Paused."
+  resumed: "Resumed."
+  stopped: "Stopped."
+  skipped: "Skipped."
+  looping: "Looping: {status}."
+
+economy:
+  insufficient_funds: "You don't have enough money."
+  wallet: "Wallet: {amount} beans"
+  bank: "Bank: {amount} beans"
+  deposited: "Deposited {amount} beans."
+  withdrawn: "Withdrawn {amount} beans."
+  transferred: "Transferred {amount} beans to {user}."
+  daily_claimed: "You claimed your daily {amount} beans!"
+  daily_already_claimed: "You've already claimed your daily beans. Come back in {time}."
+  user_reset: "User {user} has been reset."
+  money_added: "Added {amount} beans to {user}'s wallet."
 
 other:
   announce:
     invalid_level: "Invalid announce level. Please use one of the following: 0, 1, 2, 3, None, Critical, Updates, or All"
+  invite_link: "Invite the bot here!"
+
+exception_handler:
+  no_message: "Error: No message found!"
+  no_user_id: "Error: Could not find user ID!"
+  not_own_error: "You cannot report someone else's error!"
+  report_failed: "Error could not be reported!"
+  reported: "Error reported!"
+  reported_always: "Error reported!\nFuture errors will be reported automatically. To disable this, use the `/always_report_errors` command."
+  time_up: "Time is up!"
+  reported_to_developer: "Reported error to developer."
+  always_report_on: "You will now always report errors to the developer."
+  always_report_off: "You will no longer always report errors to the developer."
+
+fun:
+  rps_prompt: "Send R for :rock:, send P for :scroll:, send S for :scissors:"
+  rps_win: "You win! +50 beans"
+  rps_lose: "I win!"
+  rps_draw: "Draw!"
+  too_many_args: "You must provide exactly one of the arguments: user, flag, or flag_url."
+  no_image: "No valid image provided. Please provide a user, flag, or flag_url."
+  wikipedia_not_found: "Could not find that page."

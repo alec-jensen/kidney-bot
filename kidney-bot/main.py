@@ -2,23 +2,24 @@
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
+import asyncio
+import datetime
+import logging
+import os
+import random
+import time
+import traceback
+
 import aiohttp
 import discord
-from discord.ext import commands
-import random
-import asyncio
-import os
-import logging
-import datetime
-import time
 import regex as re
-import traceback
 import toml
+from discord.ext import commands
 
-from utils.kidney_bot import KidneyBot
-from utils.log_formatter import LogFormatter, LogFileFormatter
 from utils.checks import is_bot_owner
-from utils.database import Schemas, ServerBansDocument, AutoRoleSettingsDocument
+from utils.database import Schemas
+from utils.kidney_bot import KidneyBot
+from utils.log_formatter import LogFileFormatter, LogFormatter
 
 time_start = time.perf_counter_ns()
 
@@ -37,7 +38,7 @@ rootLogger.addHandler(consoleHandler)
 try:
     if not os.path.exists("logs"):
         os.makedirs("logs")
-    
+
     logFileFormatter = LogFileFormatter()
     log_filename = f"logs/{now.year}_{now.month}_{now.day}_{now.hour}-{now.minute}-{now.second}.log"
     fileHandler = logging.FileHandler(log_filename)
@@ -124,7 +125,7 @@ async def on_ready():
 
     # Get version from pyproject.toml
     try:
-        with open("pyproject.toml", "r") as f:
+        with open("pyproject.toml") as f:
             pyproject = toml.load(f)
             version = pyproject["project"]["version"]
     except FileNotFoundError:
@@ -144,7 +145,7 @@ async def on_guild_join(guild: discord.Guild):
         logging.error("Bot user is None, cannot send welcome message.")
         return
 
-    doc = await bot.database.serverbans.find_one({"id": guild.id})
+    doc = await bot.database.serverbans.query_one({"id": guild.id})
     if doc is not None:
         embed = discord.Embed(
             title=f"{guild} is banned.",
@@ -157,16 +158,12 @@ async def on_guild_join(guild: discord.Guild):
             name=f"You can appeal by contacting __**{owner_mention}**__.",
             value="\u2800",
         )
-        
+
         # Handle both schema and dict access patterns
-        if isinstance(doc, dict):
-            reason = doc.get('reason', 'No reason provided')
-        else:
-            reason = getattr(doc, 'reason', 'No reason provided')
+        reason = doc.reason or 'No reason provided'
         embed.add_field(name="Reason", value=f"```{reason}```")
-        
-        if bot.user is not None:
-            embed.set_footer(text=bot.user, icon_url=bot.user.avatar.url if bot.user.avatar else None)
+
+        embed.set_footer(text=bot.user, icon_url=bot.user.avatar.url if bot.user.avatar else None)
         if guild.owner is not None:
             await guild.owner.send(embed=embed)
 
@@ -234,14 +231,16 @@ async def on_message(message: discord.Message):
 
 @bot.command()
 @is_bot_owner()
-async def testLog(ctx, actiontype, action, reason, user: discord.User):
+async def testLog(ctx: commands.Context, actiontype: str, action: str, reason: str, user: discord.User):
     """Internal command for testing the log function."""
+    if ctx.guild is None:
+        return
     await bot.log(ctx.guild, actiontype, action, reason, user)
 
 
 @bot.command()
 @is_bot_owner()
-async def load(ctx, extension: str):
+async def load(ctx: commands.Context, extension: str):
     """Load a cog."""
     try:
         if extension.startswith("-"):
@@ -252,21 +251,15 @@ async def load(ctx, extension: str):
             os.path.join(cwd, "cogs", f"{extension}.py"),
         )
         await bot.load_extension(f"cogs.{extension}")
-        await ctx.reply(
-            bot.get_lang_string("main.loaded_cog").replace("%cog%", extension)
-        )
+        await ctx.reply(bot.get_lang_string("main.loaded_cog", cog=extension))
         logging.info(f"{extension.capitalize()} cog loaded.")
     except Exception as e:
-        await ctx.reply(
-            bot.get_lang_string("main.couldnt_load_cog")
-            .replace("%cog%", extension)
-            .replace("%error%", str(e))
-        )
+        await ctx.reply(bot.get_lang_string("main.couldnt_load_cog", cog=extension, error=str(e)))
 
 
 @bot.command()
 @is_bot_owner()
-async def unload(ctx, extension: str):
+async def unload(ctx: commands.Context, extension: str):
     """Unload a cog."""
     try:
         await bot.unload_extension(f"cogs.{extension}")
@@ -275,55 +268,39 @@ async def unload(ctx, extension: str):
             os.path.join(cwd, "cogs", f"{extension}.py"),
             os.path.join(cwd, "cogs", f"-{extension}.py"),
         )
-        await ctx.reply(
-            bot.get_lang_string("main.unloaded_cog").replace("%cog%", extension)
-        )
+        await ctx.reply(bot.get_lang_string("main.unloaded_cog", cog=extension))
         logging.info(f"{extension.capitalize()} cog unloaded.")
     except Exception as e:
-        await ctx.reply(
-            bot.get_lang_string("main.couldnt_unload_cog")
-            .replace("%cog%", extension)
-            .replace("%error%", str(e))
-        )
+        await ctx.reply(bot.get_lang_string("main.couldnt_unload_cog", cog=extension, error=str(e)))
 
 
 @bot.command()
 @is_bot_owner()
-async def reload(ctx, extension: str):
+async def reload(ctx: commands.Context, extension: str):
     """Reload a cog."""
     try:
         await bot.unload_extension(f"cogs.{extension}")
     except Exception as e:
-        await ctx.reply(
-            bot.get_lang_string("main.couldnt_unload_cog")
-            .replace("%cog%", extension)
-            .replace("%error%", str(e))
-        )
+        await ctx.reply(bot.get_lang_string("main.couldnt_unload_cog", cog=extension, error=str(e)))
         return
 
     try:
         await bot.load_extension(f"cogs.{extension}")
     except Exception as e:
-        await ctx.reply(
-            bot.get_lang_string("main.couldnt_load_cog")
-            .replace("%cog%", extension)
-            .replace("%error%", str(e))
-        )
+        await ctx.reply(bot.get_lang_string("main.couldnt_load_cog", cog=extension, error=str(e)))
         return
 
-    await ctx.reply(
-        bot.get_lang_string("main.reloaded_cog").replace("%cog%", extension)
-    )
+    await ctx.reply(bot.get_lang_string("main.reloaded_cog", cog=extension))
     logging.info(f"Reloaded cog {extension}")
 
 
 @bot.command()
 @is_bot_owner()
-async def say(ctx, *, text: str):
+async def say(ctx: commands.Context, *, text: str):
     """Make the bot say something."""
     try:
         await ctx.message.delete()
-    except:
+    except Exception:
         pass
     await ctx.channel.send(text)
 
@@ -334,7 +311,7 @@ async def reply(ctx: commands.Context, message: str, *, text: str):
     """Make the bot reply to a message."""
     try:
         await ctx.message.delete()
-    except:
+    except Exception:
         pass
     channel = ctx.channel
     await (await channel.fetch_message(int(message))).reply(text)
@@ -346,7 +323,7 @@ async def react(ctx: commands.Context, message: str, reaction: str):
     """Make the bot react to a message."""
     try:
         await ctx.message.delete()
-    except:
+    except Exception:
         pass
     channel = ctx.channel
     await (await channel.fetch_message(int(message))).add_reaction(reaction)
@@ -354,7 +331,7 @@ async def react(ctx: commands.Context, message: str, reaction: str):
 
 @bot.command()
 @is_bot_owner()
-async def raiseexception(ctx):
+async def raiseexception(ctx: commands.Context):
     """Internal command for testing error handling."""
     raise Exception("artificial exception raised")
 
@@ -363,12 +340,11 @@ async def raiseexception(ctx):
 @is_bot_owner()
 async def serverban(ctx: commands.Context, guild: discord.Guild, *, text: str):
     """Ban a server from using the bot."""
-    n = await bot.database.serverbans.count_documents({"id": str(guild.id)})
-    if n > 0:
+    existing = await bot.database.serverbans.get(guild.id)
+    if existing is not None:
         await ctx.channel.send("Server already banned!")
         return
-    doc = {"id": guild.id, "name": guild, "owner": guild.owner, "reason": str(text)}
-    await bot.database.serverbans.insert_one(doc)
+    await bot.database.serverbans.save(Schemas.ServerBans(id=guild.id, name=guild.id, owner=guild.owner_id, reason=str(text)))
 
     embed = discord.Embed(
         title=f"{guild} has been banned.",
@@ -393,13 +369,13 @@ async def serverban(ctx: commands.Context, guild: discord.Guild, *, text: str):
 
 @bot.command()
 @is_bot_owner()
-async def serverunban(ctx, guild: str):
+async def serverunban(ctx: commands.Context, guild: str):
     """Unban a server from using the bot."""
-    n = await bot.database.serverbans.count_documents({"id": guild})
-    if n == 0:
+    existing = await bot.database.serverbans.get(int(guild))
+    if existing is None:
         await ctx.reply("Server not banned!")
         return
-    await bot.database.serverbans.delete_one({"id": guild})
+    await bot.database.serverbans.delete(int(guild))
     await ctx.reply(
         f"Server *{guild}* has been unbanned from using **{getattr(bot, 'user', 'Kidney Bot')}**."
     )
@@ -407,7 +383,7 @@ async def serverunban(ctx, guild: str):
 
 @bot.command()
 @is_bot_owner()
-async def createinvite(ctx, guild: discord.Guild):
+async def createinvite(ctx: commands.Context, guild: discord.Guild):
     """Create an invite to a server."""
     invite = None
     for channel in guild.text_channels:
@@ -416,7 +392,7 @@ async def createinvite(ctx, guild: discord.Guild):
                 max_uses=1, reason=bot.get_lang_string("main.createinvite.reason")
             )
             break
-        except:
+        except Exception:
             pass
 
     if invite is None:
@@ -424,12 +400,13 @@ async def createinvite(ctx, guild: discord.Guild):
             bot.get_lang_string("main.createinvite.couldnt_create_invite")
         )
 
-    await ctx.reply(invite)
+    await ctx.reply(str(invite))
+    return None
 
 
 @bot.command()
 @is_bot_owner()
-async def reloadconfig(ctx):
+async def reloadconfig(ctx: commands.Context):
     """Reload the config file."""
     try:
         bot.config.reload()
@@ -442,10 +419,10 @@ async def reloadconfig(ctx):
 
 @bot.command()
 @is_bot_owner()
-async def clearcache(ctx):
+async def clearcache(ctx: commands.Context):
     """Clear the bot's cache."""
     for collection in bot.database.collections:
-        await collection.cache.clear()
+        collection.cache.clear()
 
     await ctx.reply("Cache cleared.")
 
@@ -500,17 +477,11 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
                 )
 
     highest_member_role = None
-    doc = await bot.database.autorolesettings.find_one(
-        Schemas.AutoRoleSettings(guild.id)
-    )
+    doc = await bot.database.autorolesettings.get(guild.id)
     autorole_roles = []
     if doc is not None:
-        # Handle both schema and dict access patterns
-        if isinstance(doc, dict):
-            roles_data = doc.get("roles", [])
-        else:
-            roles_data = getattr(doc, 'roles', [])
-            
+        roles_data = doc.roles or []
+
         for role in roles_data:
             if isinstance(role, dict):
                 role_id = role.get('id', 0)

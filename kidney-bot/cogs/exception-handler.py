@@ -2,16 +2,17 @@
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
-import discord
-from discord.ext import commands
-from discord import app_commands
 import asyncio
-import traceback
 import logging
+import traceback
 from uuid import uuid4
 
-from utils.kidney_bot import KidneyBot
+import discord
+from discord import app_commands
+from discord.ext import commands
+
 from utils.database import Schemas
+from utils.kidney_bot import KidneyBot
 
 error_buffer = {}
 
@@ -65,11 +66,11 @@ class ExceptionView(discord.ui.View):
         bot: KidneyBot = interaction.client  # type: ignore
         if bot.config.error_channel is not None and interaction.guild:
             channel = interaction.guild.get_channel(bot.config.error_channel)
-            
+
             if isinstance(channel, discord.TextChannel):
                 try:
                     await channel.send(f"```{error_buffer[exception_id]}```")
-                except:
+                except Exception:
                     await channel.send(f'error too large to send to channel. id({exception_id})')
 
         del error_buffer[exception_id]
@@ -115,20 +116,19 @@ class ExceptionView(discord.ui.View):
         bot: KidneyBot = interaction.client  # type: ignore
         if bot.config.error_channel is not None and interaction.guild:
             channel = interaction.guild.get_channel(bot.config.error_channel)
-            
+
             if isinstance(channel, discord.TextChannel):
                 try:
                     await channel.send(f"```{error_buffer[exception_id]}```")
-                except:
+                except Exception:
                     await channel.send(f'error too large to send to channel. id({exception_id})')
 
         del error_buffer[exception_id]
 
-        doc = await bot.database.exceptions.find_one(Schemas.ExceptionSchema(interaction.user.id))
-        if doc is None:
-            await bot.database.exceptions.insert_one(Schemas.ExceptionSchema(interaction.user.id, True))
-        else:
-            await bot.database.exceptions.update_one({'user_id': interaction.user.id}, {'$set': {'always_report_errors': True}})
+        doc = await bot.database.exceptions.get(interaction.user.id) or \
+              Schemas.ExceptionSchema(interaction.user.id)
+        doc.always_report_errors = True
+        await bot.database.exceptions.save(doc)
 
         await interaction.response.send_message('Error reported!\nFuture errors will be reported automatically. To disable this, use the `/always_report_errors` command.')
 
@@ -165,7 +165,7 @@ class ExceptionView(discord.ui.View):
         if exception_id is None:
             await interaction.response.send_message('Error could not be reported!', ephemeral=True)
             return
-        
+
         del error_buffer[exception_id]
         await interaction.response.send_message(f'Error ignored! ID: {exception_id}', ephemeral=True)
 
@@ -182,13 +182,13 @@ class ExceptionHandler(commands.Cog):
         logging.info('Exception-handler cog loaded.')
 
     @commands.Cog.listener()
-    async def on_command_error(self, ctx: commands.Context, error) -> None:
-        db_task = asyncio.create_task(self.bot.database.exceptions.find_one(Schemas.ExceptionSchema(ctx.author.id)))
+    async def on_command_error(self, ctx: commands.Context, error: commands.CommandError) -> None:
+        db_task = asyncio.create_task(self.bot.database.exceptions.get(ctx.author.id))
 
         if isinstance(error, commands.BadArgument) or isinstance(error, commands.MissingRequiredArgument):
             await ctx.channel.send(str(error))
         elif isinstance(error, commands.MissingPermissions):
-            await ctx.channel.send(f"You don't have permission to use that command!")
+            await ctx.channel.send("You don't have permission to use that command!")
         elif isinstance(error, commands.CommandNotFound):
             pass
         elif isinstance(error, commands.CommandOnCooldown):
@@ -211,22 +211,19 @@ class ExceptionHandler(commands.Cog):
 
             doc = await db_task
 
-            if doc is not None:
-                # Safe access for both dict and schema
-                always_report = doc.get('always_report_errors') if isinstance(doc, dict) else getattr(doc, 'always_report_errors', False)
-                if always_report:
+            if doc is not None and doc.always_report_errors:
                     logging.error(f'Error id({exception_id})\n' + error_buffer[exception_id])
                     if self.bot.config.error_channel is not None:
                         channel = self.bot.get_channel(self.bot.config.error_channel)
                         if isinstance(channel, discord.TextChannel):
                             try:
                                 await channel.send(f"```{error_buffer[exception_id]}```")
-                            except:
+                            except Exception:
                                 await channel.send(f'error too large to send to channel. id({exception_id})')
-                    await ctx.send(f'Reported error to developer.')
+                    await ctx.send('Reported error to developer.')
                     del error_buffer[exception_id]
                     return
-                
+
             embed = discord.Embed(
                 title='Oops! I had a problem.', color=discord.Color.red())
             embed.add_field(name='Please send this error to the developer along with the command you ran.',
@@ -235,16 +232,26 @@ class ExceptionHandler(commands.Cog):
                 text=f'id({exception_id}), user_id({ctx.author.id})')
             try:
                 await ctx.send(embed=embed, view=ExceptionView())
-            except:
+            except Exception:
                 try:
                     await ctx.send(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}\nid({exception_id}), user_id({ctx.author.id})', view=ExceptionView())
-                except:
+                except Exception:
                     await ctx.send(f'An error has occured.\nid({exception_id}), user_id({ctx.author.id})', view=ExceptionView())
 
     @commands.Cog.listener()
     async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        db_task = asyncio.create_task(self.bot.database.exceptions.find_one(Schemas.ExceptionSchema(interaction.user.id)))
-        
+        unwrapped = error.original if isinstance(error, app_commands.CommandInvokeError) else error
+        if isinstance(unwrapped, discord.NotFound) and unwrapped.code == 10062:
+            # Interaction token expired before we could respond (network/gateway latency).
+            # Nothing we can do — the token is dead, so even an error report would fail too.
+            logging.warning(
+                f"Interaction for command '{interaction.command.name if interaction.command else 'Unknown'}' "
+                "expired before a response could be sent."
+            )
+            return
+
+        db_task = asyncio.create_task(self.bot.database.exceptions.get(interaction.user.id))
+
         if isinstance(error, app_commands.CommandOnCooldown):
             await interaction.response.send_message(f'Slow down! Try again in **{error.retry_after:.2f} seconds**', ephemeral=True)
         elif isinstance(error, app_commands.MissingPermissions):
@@ -261,31 +268,28 @@ class ExceptionHandler(commands.Cog):
                 formattedTB += i
             formattedTB += '```'
 
-            error_buffer[exception_id] = f'Application command: {interaction.command.name if interaction.command else "Unknown"}; Arguments: {[param for param in interaction.namespace]}; \
+            error_buffer[exception_id] = f'Application command: {interaction.command.name if interaction.command else "Unknown"}; Arguments: {list(interaction.namespace)}; \
                           Error: {formattedTB.replace("`", "")}'
 
             doc = await db_task
 
-            if doc is not None:
-                # Safe access for both dict and schema
-                always_report = doc.get('always_report_errors') if isinstance(doc, dict) else getattr(doc, 'always_report_errors', False)
-                if always_report:
+            if doc is not None and doc.always_report_errors:
                     logging.error(f'Error id({exception_id})\n' + error_buffer[exception_id])
                     if self.bot.config.error_channel is not None:
                         channel = self.bot.get_channel(self.bot.config.error_channel)
                         if isinstance(channel, discord.TextChannel):
                             try:
                                 await channel.send(f"```{error_buffer[exception_id]}```")
-                            except:
+                            except Exception:
                                 await channel.send(f'error too large to send to channel. id({exception_id})')
                     try:
-                        await interaction.response.send_message(f'Reported error to developer.')
-                    except:
+                        await interaction.response.send_message('Reported error to developer.')
+                    except Exception:
                         if isinstance(interaction.channel, discord.TextChannel):
                             await interaction.channel.send(f'{interaction.user.mention} Reported error to developer.')
                     del error_buffer[exception_id]
                     return
-                
+
             embed = discord.Embed(
                 title='Oops! I had a problem.', color=discord.Color.red())
             embed.add_field(name='Please send this error to the developer along with the command you ran.',
@@ -294,27 +298,22 @@ class ExceptionHandler(commands.Cog):
                 text=f'id({exception_id}), user_id({interaction.user.id})')
             try:
                 await interaction.response.send_message(embed=embed, ephemeral=True, view=ExceptionView())
-            except:
+            except Exception:
                 try:
                     await interaction.response.send_message(f'Looks like I had a MASSIVE error! Please send this to the dev!\n{formattedTB}id({exception_id}), user_id({interaction.user.id})', ephemeral=True, view=ExceptionView())
-                except:
+                except Exception:
                     await interaction.response.send_message(f'An error has occured.\nid({exception_id}), user_id({interaction.user.id})', ephemeral=True, view=ExceptionView())
-                
+
     @app_commands.command(name='always_report_errors', description='Toggle whether or not to always report errors to the developer.')
     async def always_report_errors(self, interaction: discord.Interaction, value: bool):
-        doc = await self.bot.database.exceptions.find_one(Schemas.ExceptionSchema(interaction.user.id))
-        if doc is None:
-            await self.bot.database.exceptions.insert_one(Schemas.ExceptionSchema(interaction.user.id, value))
-            if value:
-                await interaction.response.send_message('You will now always report errors to the developer.', ephemeral=True)
-            else:
-                await interaction.response.send_message('You will not automatically report errors to the developer.', ephemeral=True)
+        doc = await self.bot.database.exceptions.get(interaction.user.id) or \
+              Schemas.ExceptionSchema(interaction.user.id)
+        doc.always_report_errors = value
+        await self.bot.database.exceptions.save(doc)
+        if value:
+            await interaction.response.send_message('You will now always report errors to the developer.', ephemeral=True)
         else:
-            await self.bot.database.exceptions.update_one({'user_id': interaction.user.id}, {'$set': {'always_report_errors': value}})
-            if value:
-                await interaction.response.send_message('You will now always report errors to the developer.', ephemeral=True)
-            else:
-                await interaction.response.send_message('You will no longer always report errors to the developer.', ephemeral=True)
+            await interaction.response.send_message('You will no longer always report errors to the developer.', ephemeral=True)
 
 
 async def setup(bot: commands.Bot) -> None:

@@ -1,150 +1,87 @@
-import asyncio
-import time
 import logging
-import sys
+import time
 
-from utils.misc import humanbytes
 
 class Cache:
-    def __init__(self, ttl: int = 60, cleanup_interval: int | None = None):
-            """
-            Initializes a Cache object.
-
-            Args:
-                ttl (int): Time-to-live for cache entries in seconds. Defaults to 60.
-                cleanup_interval (int): Interval in seconds between cache cleanups. Defaults to ttl value.
-            """
-
-            self._storage = []
-            self._ttl = ttl
-            self._last_cleanup = time.time()
-            if cleanup_interval is None:
-                self._cleanup_interval = ttl
-            else:
-                self._cleanup_interval = cleanup_interval
-
     """
-    CacheItem = {
-        value: obj value
-        time_created: time, in seconds, of object creation
-    }
+    O(1) document cache keyed on a single primary field.
+
+    Only serves cache hits for simple single-key queries (e.g. {guild_id: 123}).
+    Queries with extra filter fields are passed through to the database so the
+    cache never returns stale partial matches.
+
+    All methods are synchronous — no asyncio needed for dict operations.
+    Call cleanup() periodically (the Database class drives this via one shared task).
     """
 
-    async def add(self, obj):
-        if not isinstance(obj, dict):
-            raise TypeError("obj must be a dict")
-        
-        if await self.get_one(obj) is not None:
+    def __init__(self, primary_key: str, ttl: int = 300):
+        self._pk = primary_key
+        self._ttl = ttl
+        # primary_key_value → {"value": doc, "ts": float}
+        self._store: dict = {}
+
+    # ── write ──────────────────────────────────────────────────────────────────
+
+    def add(self, doc: dict) -> None:
+        key = doc.get(self._pk)
+        if key is None:
             return
-        
-        cacheItem = {"value": obj, "time_created": time.time()}
-        
-        self._storage.append(cacheItem)
+        self._store[key] = {"value": doc, "ts": time.monotonic()}
 
-    async def add_many(self, objs):
-        for obj in objs:
-            await self.add(obj)
+    def add_many(self, docs: list[dict]) -> None:
+        for doc in docs:
+            self.add(doc)
 
-    async def get_one(self, query):
-        for item in self._storage:
-            for key, value in query.items():
-                if item['value'][key] != value:
-                    break
-            else:
-                return item['value']
+    def update(self, query: dict, update: dict) -> None:
+        item = self._get_item(query)
+        if item is None:
+            return
+        doc = item["value"].copy()
+        if "$set" in update:
+            doc.update(update["$set"])
+        if "$unset" in update:
+            for k in update["$unset"]:
+                doc.pop(k, None)
+        pk_val = query[self._pk]
+        self._store[pk_val] = {"value": doc, "ts": item["ts"]}
 
-        return None
+    def remove(self, query: dict) -> None:
+        pk_val = query.get(self._pk)
+        if pk_val is not None:
+            self._store.pop(pk_val, None)
 
-    async def get_all(self, query, limit=None):
-        if limit is None:
-            limit = len(self._storage)
+    def clear(self) -> None:
+        self._store.clear()
 
-        results = []
+    # ── read ───────────────────────────────────────────────────────────────────
 
-        for item in self._storage:
-            for key, value in query.items():
-                if item['value'][key] != value:
-                    break
-            else:
-                results.append(item['value'])
+    def get_one(self, query: dict):
+        """Return cached doc or None. Only answers simple {pk: val} queries."""
+        item = self._get_item(query)
+        return item["value"] if item is not None else None
 
-        if results == []:
+    # ── maintenance ────────────────────────────────────────────────────────────
+
+    def cleanup(self) -> int:
+        now = time.monotonic()
+        expired = [k for k, v in self._store.items() if now - v["ts"] > self._ttl]
+        for k in expired:
+            del self._store[k]
+        if expired:
+            logging.debug(f"Cache({self._pk}): evicted {len(expired)} expired entries")
+        return len(expired)
+
+    # ── internal ───────────────────────────────────────────────────────────────
+
+    def _get_item(self, query: dict):
+        """Return raw cache item only for simple single-pk queries."""
+        if len(query) != 1 or self._pk not in query:
             return None
-        elif len(results) <= limit:
-            return results
-        else:
-            return results[:limit]
-        
-    async def count(self, query):
-        count = 0
-
-        for item in self._storage:
-            for key, value in query.items():
-                if item['value'][key] != value:
-                    break
-            else:
-                count += 1
-
-        return count
-    
-    async def remove(self, query):
-        obj = await self.get_one(query)
-        if obj is None:
-            return
-        
-        for i, item in enumerate(self._storage):
-            if item['value'] == obj:
-                self._storage.pop(i)
-                break
-
-    async def remove_many(self, query):
-        objs = await self.get_all(query)
-        if objs is None:
-            return
-        
-        for obj in objs:
-            await self.remove(obj)
-
-    async def update(self, query, update):
-        obj = await self.get_one(query)
-        if obj is None:
-            return
-        
-        new_obj = obj.copy()
-        for key, value in update["$set"].items():
-            new_obj[key] = value
-
-        await self.remove(query)
-        await self.add(new_obj)
-    
-    async def clear(self):
-        self._storage = []
-
-    async def _cleanup(self):
-        self._last_cleanup = time.time()
-
-        start_len = len(self._storage)
-        start_size = sys.getsizeof(self._storage)
-
-        self._storage = [item for item in self._storage if time.time() - item['time_created'] <= self._ttl]
-
-        end_len = len(self._storage)
-        end_size = sys.getsizeof(self._storage)
-
-        if start_len - end_len > 0:
-            logging.info(f'Cache cleanup complete. Removed {start_len - end_len} items ({
-                humanbytes(start_size-end_size)}). Took {time.time() - self._last_cleanup} seconds.')
-
-    async def cleanup_task(self):
-        """
-        A background task that runs cache cleanup at regular intervals.
-        """
-        while True:
-            if time.time() - self._last_cleanup >= self._cleanup_interval:
-                await self._cleanup()
-            elif sys.getsizeof(self._storage) > 1024 * 1024 * 1024: # 1 GB
-                await self.clear()
-                logging.info('Cache cleared due to size limit.')
-            
-            time_until_next_cleanup = self._cleanup_interval - (time.time() - self._last_cleanup)
-            await asyncio.sleep(time_until_next_cleanup)
+        pk_val = query[self._pk]
+        item = self._store.get(pk_val)
+        if item is None:
+            return None
+        if time.monotonic() - item["ts"] > self._ttl:
+            del self._store[pk_val]
+            return None
+        return item

@@ -1,8 +1,8 @@
-version: "3"
-
 services:
     client:
-        image: kidneybot
+        build:
+            context: .
+            dockerfile: Dockerfile
         volumes:
             - ./logs:/app/logs
             - ./config.json:/app/config.json:ro

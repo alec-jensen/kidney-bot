@@ -4,6 +4,7 @@
 
 import logging
 
+
 class Colors:
     """ ANSI color codes """
     BLACK = "\033[0;30m"
@@ -33,7 +34,7 @@ class Colors:
     # cancel SGR codes if we don't write to a terminal
     if not __import__("sys").stdout.isatty():
         for _ in dir():
-            if isinstance(_, str) and _[0] != "_":
+            if _[0] != "_":  # type: ignore[index]
                 locals()[_] = ""
     else:
         # set Windows console in VT mode
@@ -55,13 +56,13 @@ class LogFormatter(logging.Formatter):
         logging.CRITICAL: prefix + Colors.LIGHT_PURPLE + msg + suffix + Colors.END,
     }
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt, '%H:%M:%S')
         return formatter.format(record)
-    
+
 class LogFileFormatter(logging.Formatter):
-    prefix = f"[%(asctime)s] "
+    prefix = "[%(asctime)s] "
     msg = "[%(levelname)8s] --- %(message)s "
     suffix = "(%(name)s - %(filename)s:%(lineno)s)"
 
@@ -73,7 +74,7 @@ class LogFileFormatter(logging.Formatter):
         logging.CRITICAL: prefix + msg + suffix,
     }
 
-    def format(self, record):
+    def format(self, record: logging.LogRecord) -> str:
         log_fmt = self.FORMATS.get(record.levelno)
         formatter = logging.Formatter(log_fmt, '%H:%M:%S')
         return formatter.format(record)

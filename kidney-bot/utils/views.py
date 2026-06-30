@@ -21,7 +21,7 @@ class Confirm(discord.ui.View):
         if self.accept_response is not None:
             await interaction.response.send_message(self.accept_response, ephemeral=self.ephemeral)
         self.value = True
-        
+
         for child in self.children:
             if child != button:
                 child.disabled = True # type: ignore
@@ -38,7 +38,7 @@ class Confirm(discord.ui.View):
     @discord.ui.button(label='Cancel', style=discord.ButtonStyle.red, emoji='❌')
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         self.interaction = interaction
-        
+
         if self.deny_response is not None:
             await interaction.response.send_message(self.deny_response, ephemeral=self.ephemeral)
         self.value = False
