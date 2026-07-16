@@ -177,13 +177,33 @@ class Other(commands.Cog):
     @app_commands.command(name='setup', description='Setup the bot for your server.')
     @app_commands.guild_only()
     async def setup(self, interaction: discord.Interaction):
+        if not interaction.guild:
+            await interaction.response.send_message("This command can only be used in a server.", ephemeral=True)
+            return
+
+        dashboard_url = self.bot.config.dashboard_frontend_url
+        if dashboard_url:
+            base_url = dashboard_url.rstrip('/')
+            embed = discord.Embed(title='Setup', color=discord.Color.blue())
+            embed.add_field(
+                name='Setup is easiest on the web dashboard',
+                value='Use the setup wizard to configure kidney bot for your server, or open all settings to fine-tune everything yourself.',
+                inline=False)
+
+            view = discord.ui.View()
+            view.add_item(discord.ui.Button(
+                label='Open setup wizard',
+                style=discord.ButtonStyle.link,
+                url=f'{base_url}/guilds/{interaction.guild.id}/setup'))
+            view.add_item(discord.ui.Button(
+                label='All settings',
+                style=discord.ButtonStyle.link,
+                url=f'{base_url}/guilds/{interaction.guild.id}'))
+
+            await interaction.response.send_message(embed=embed, view=view, ephemeral=True)
+            return
+
         embed = discord.Embed(title='Setup', color=discord.Color.blue())
-        embed.add_field(
-            name='Active Guard', value='Active Guard is a feature that blocks known bot accounts from joining your server.')
-        embed.add_field(
-            name='AI Detection', value='AI Detection is a feature that detects toxicity in messages and takes action if the toxicity is above a certain threshold.')
-        embed.add_field(name='Permission Timeout',
-                        value='Permission Timeout is a feature that ensures users have been a member of your server for a certain amount of time before they can use moderation permissions.')
         embed.add_field(
             name='Auto Role', value='Auto Role is a feature that automatically gives roles to users when they join.')
         embed.add_field(

@@ -65,8 +65,8 @@ class TestGet:
         assert col.cache.get_one({"guild_id": 2}) == doc
 
     def test_extra_filters_bypass_cache(self):
-        col = make_collection(primary_key="user_id", schema_class=Schemas.WarnSchema)
-        doc = {"user_id": 7, "guild_id": 8, "warns": []}
+        col = make_collection(primary_key="user_id", schema_class=Schemas.ModConfig)
+        doc = {"user_id": 7, "guild_id": 8}
         col.collection.find_one = AsyncMock(return_value=doc)
         col.cache.add(doc)
         run(col.get(7, guild_id=8))
@@ -135,7 +135,7 @@ class TestDelete:
         assert col.cache.get_one({"guild_id": 1}) is None
 
     def test_extra_filters(self):
-        col = make_collection(primary_key="user_id", schema_class=Schemas.WarnSchema)
+        col = make_collection(primary_key="user_id", schema_class=Schemas.ModConfig)
         col.collection.delete_one = AsyncMock(return_value=MagicMock(deleted_count=0))
         run(col.delete(7, guild_id=8))
         assert col.collection.delete_one.call_count == 1
@@ -186,11 +186,12 @@ class TestLegacyPk:
 
 class TestQueryEscapeHatches:
     def test_query_one_returns_schema(self):
-        col = make_collection(primary_key="user_id", schema_class=Schemas.WarnSchema)
-        doc = {"user_id": 5, "guild_id": 6, "warns": [{"id": "abc"}]}
+        col = make_collection(primary_key="id", schema_class=Schemas.ModLogEntry)
+        doc = {"id": "abc-123", "guild_id": 1, "user_id": 5, "moderator_id": 3,
+               "action_type": "warn", "timestamp": 1000}
         col.collection.find_one = AsyncMock(return_value=doc)
-        result = run(col.query_one({"warns.id": "abc"}))
-        assert isinstance(result, Schemas.WarnSchema)
+        result = run(col.query_one({"id": "abc-123"}))
+        assert isinstance(result, Schemas.ModLogEntry)
         assert result.user_id == 5
 
     def test_query_one_none_when_not_found(self, col):

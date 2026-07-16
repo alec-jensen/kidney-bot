@@ -2,6 +2,7 @@
 # Copyright (C) 2023  Alec Jensen
 # Full license at LICENSE.md
 
+import argparse
 import asyncio
 import datetime
 import logging
@@ -23,12 +24,17 @@ from utils.log_formatter import LogFileFormatter, LogFormatter
 
 time_start = time.perf_counter_ns()
 
+# Parse CLI flags before logging configuration so --debug can set the level correctly.
+_arg_parser = argparse.ArgumentParser(description="KidneyBot")
+_arg_parser.add_argument("--debug", action="store_true", help="Enable DEBUG-level logging")
+_args = _arg_parser.parse_args()
+
 # Logging configuration
 
 now = datetime.datetime.now()
 logFormatter = LogFormatter()
 rootLogger = logging.getLogger()
-rootLogger.setLevel(logging.INFO)
+rootLogger.setLevel(logging.DEBUG if _args.debug else logging.INFO)
 
 consoleHandler = logging.StreamHandler()
 consoleHandler.setFormatter(logFormatter)
@@ -51,6 +57,11 @@ except PermissionError as e:
 except Exception as e:
     print(f"Warning: Could not set up file logging: {e}")
     print("Continuing with console logging only...")
+
+# In debug mode suppress the flood from discord.py / aiohttp internals.
+if _args.debug:
+    for _lib in ("discord", "discord.http", "discord.gateway", "aiohttp", "motor", "pymongo"):
+        logging.getLogger(_lib).setLevel(logging.WARNING)
 
 bot: KidneyBot = KidneyBot(intents=discord.Intents.all())
 
@@ -511,8 +522,6 @@ async def guild_debug_info(ctx: commands.Context, guild: discord.Guild | None = 
                         f"Moderation role ({role.mention}) is below a member role ({highest_member_role.mention})."
                     )
 
-    # TODO: check database for issues
-
     if len(possible_issues) == 0:
         embed.add_field(name="No issues found!", value="")
     else:
@@ -546,6 +555,23 @@ async def main():
             # Wait for database to connect
             while not bot.database.connected:
                 await asyncio.sleep(0.1)
+
+            try:
+                issues_found = 0
+                for collection in bot.database.collections:
+                    count = await collection.collection.count_documents(
+                        {collection._pk: {"$exists": False}})
+                    if count > 0:
+                        issues_found += count
+                        logging.warning(
+                            f"Database health check: {collection.collection.name} has "
+                            f"{count} document(s) missing primary key '{collection._pk}'."
+                        )
+                if issues_found == 0:
+                    logging.info(
+                        f"Database health check passed ({len(bot.database.collections)} collections)")
+            except Exception:
+                logging.exception("Database health check failed to run.")
 
             status_task = asyncio.create_task(status())
 

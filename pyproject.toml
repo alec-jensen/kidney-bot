@@ -22,6 +22,7 @@ dependencies = [
     "wikipedia~=1.4",
     "spotdl~=4.5",
     "yt-dlp~=2026.6",
+    "pillow~=12.2",
 ]
 
 [dependency-groups]

@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "dashboard-api",
+      "runtimeExecutable": "uv",
+      "runtimeArgs": ["run", "--directory", "services/api", "uvicorn", "app.main:app", "--port", "8000"],
+      "port": 8000
+    },
+    {
+      "name": "dashboard-frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "apps/dashboard"],
+      "port": 5173
+    }
+  ]
+}

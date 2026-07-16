@@ -115,15 +115,58 @@ class TestScammerListSchema:
         assert obj.to_dict() == doc
 
 
-class TestWarnSchema:
+class TestModLogEntrySchema:
     def test_round_trip(self):
-        warns = [{"reason": "spam", "timestamp": 1000, "moderator": 5, "id": "abc"}]
-        doc = {"user_id": 7, "guild_id": 8, "warns": warns}
-        obj = Schemas.WarnSchema.from_dict(doc)
-        assert obj.user_id == 7
-        assert obj.guild_id == 8
-        assert obj.warns == warns
+        doc = {
+            "id": "uuid-abc", "guild_id": 1, "user_id": 2, "moderator_id": 3,
+            "action_type": "warn", "reason": "spam", "timestamp": 1000,
+            "duration": None, "expires_at": None,
+        }
+        obj = Schemas.ModLogEntry.from_dict(doc)
+        assert obj.id == "uuid-abc"
+        assert obj.action_type == "warn"
+        assert obj.user_id == 2
+        assert obj.to_dict() == {k: v for k, v in doc.items() if v is not None}
+
+    def test_duration_fields(self):
+        doc = {"id": "x", "guild_id": 1, "user_id": 2, "moderator_id": 3,
+               "action_type": "tempmute", "timestamp": 1000, "duration": 14400, "expires_at": 15400}
+        obj = Schemas.ModLogEntry.from_dict(doc)
+        assert obj.duration == 14400
+        assert obj.expires_at == 15400
+
+    def test_defaults_on_none(self):
+        obj = Schemas.ModLogEntry.from_dict(None)
+        assert obj.id is None
+
+    def test_to_dict_excludes_none(self):
+        obj = Schemas.ModLogEntry(id="y", guild_id=1, user_id=2, moderator_id=3, action_type="kick", timestamp=999)
+        d = obj.to_dict()
+        assert "duration" not in d
+        assert d["action_type"] == "kick"
+
+
+class TestModConfigSchema:
+    def test_round_trip(self):
+        rules = [{"id": "r1", "conditions": {"action_types": ["warn"], "min_count": 3, "window_days": 7},
+                  "suggestions": [{"action_type": "kick"}]}]
+        doc = {"guild_id": 5, "log_channel_id": 99, "escalation_rules": rules, "require_reason": True}
+        obj = Schemas.ModConfig.from_dict(doc)
+        assert obj.guild_id == 5
+        assert obj.log_channel_id == 99
+        assert obj.escalation_rules == rules
+        assert obj.require_reason is True
         assert obj.to_dict() == doc
+
+    def test_defaults_on_none(self):
+        obj = Schemas.ModConfig.from_dict(None)
+        assert obj.guild_id is None
+        assert obj.require_reason is None
+
+    def test_to_dict_excludes_none(self):
+        obj = Schemas.ModConfig(guild_id=1)
+        d = obj.to_dict()
+        assert list(d.keys()) == ["guild_id"]
 
 
 class TestGuildConfigSchema:

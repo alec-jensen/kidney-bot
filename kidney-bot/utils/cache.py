@@ -50,6 +50,11 @@ class Cache:
         if pk_val is not None:
             self._store.pop(pk_val, None)
 
+    def invalidate(self, pk_value) -> None:
+        """Drop a single cached doc by its raw primary-key value (not a query dict).
+        Used by external invalidation signals (e.g. the dashboard WS link)."""
+        self._store.pop(pk_value, None)
+
     def clear(self) -> None:
         self._store.clear()
 
