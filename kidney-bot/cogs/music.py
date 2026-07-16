@@ -87,6 +87,10 @@ class GuildMusicState:
         self.bot = bot
         self.guild = guild
         self.queue: list[Track] = []
+        # Tracks already played this loop cycle, waiting to be replayed once
+        # `queue` drains — kept separate so newly-added songs land ahead of
+        # them instead of behind (see _next_track).
+        self._loop_buffer: list[Track] = []
         self.current: Track | None = None
         self.voice_client: discord.VoiceClient | None = None
         self.text_channel: discord.TextChannel | None = None
@@ -116,6 +120,10 @@ class GuildMusicState:
 
         # Set before intentional disconnects so on_voice_state_update won't reconnect
         self._intentional_disconnect: bool = False
+
+        # Serializes rejoin attempts so overlapping disconnect events can't
+        # each spawn their own reconnect + player loop
+        self._rejoin_lock: asyncio.Lock = asyncio.Lock()
 
         # Injected by Music._state() so the player loop can update the NP panel
         self._cog: Music | None = None
@@ -170,8 +178,17 @@ class GuildMusicState:
         log.info(f"[{self.guild}] Stop called (clear_queue={clear_queue})")
         if clear_queue:
             self.queue.clear()
+            self._loop_buffer.clear()
         if self.voice_client and (self.voice_client.is_playing() or self.voice_client.is_paused()):
             self.voice_client.stop()
+
+    def clear_queue(self) -> int:
+        """Empty the upcoming queue (including the loop-replay buffer) without stopping playback."""
+        count = len(self.display_queue)
+        self.queue.clear()
+        self._loop_buffer.clear()
+        log.info(f"[{self.guild}] Queue cleared ({count} tracks)")
+        return count
 
     def set_volume(self, vol: float):
         old = self.volume
@@ -183,8 +200,19 @@ class GuildMusicState:
             self.seek(self.elapsed)
 
     def shuffle(self):
+        combined = self.queue + self._loop_buffer
+        random.shuffle(combined)
+        self.queue = combined
+        self._loop_buffer = []
         log.info(f"[{self.guild}] Queue shuffled ({len(self.queue)} tracks)")
-        random.shuffle(self.queue)
+
+    @property
+    def display_queue(self) -> list[Track]:
+        """Full upcoming queue in playback order, including tracks already
+        played this loop cycle that are waiting to replay next cycle."""
+        if self.loop_mode == LoopMode.QUEUE:
+            return self.queue + self._loop_buffer
+        return self.queue
 
     def seek(self, seconds: float) -> bool:
         if self.current is None or not self.voice_client:
@@ -308,11 +336,14 @@ class GuildMusicState:
         if self.loop_mode == LoopMode.TRACK and self.current is not None:
             log.debug(f"[{self.guild}] Loop=TRACK: replaying '{self.current.title}'")
             return self.current
+        if not self.queue and self.loop_mode == LoopMode.QUEUE and self._loop_buffer:
+            log.debug(f"[{self.guild}] Loop=QUEUE: wrapping {len(self._loop_buffer)} track(s) back into queue")
+            self.queue, self._loop_buffer = self._loop_buffer, []
         if self.queue:
             nxt = self.queue.pop(0)
             if self.loop_mode == LoopMode.QUEUE and self.current is not None:
-                self.queue.append(self.current)
-                log.debug(f"[{self.guild}] Loop=QUEUE: re-appended '{self.current.title}', queue now {len(self.queue)} tracks")
+                self._loop_buffer.append(self.current)
+                log.debug(f"[{self.guild}] Loop=QUEUE: buffered '{self.current.title}' for next cycle, buffer now {len(self._loop_buffer)} tracks")
             return nxt
         return None
 
@@ -389,10 +420,11 @@ class GuildMusicState:
         if self._prefetch_task and not self._prefetch_task.done():
             self._prefetch_task.cancel()
         self._prefetched = None
-        if not self.queue:
+        upcoming = self.display_queue
+        if not upcoming:
             log.debug(f"[{self.guild}] No next track to pre-fetch")
             return
-        next_track = self.queue[0]
+        next_track = upcoming[0]
         duration = self.current.duration if self.current else 0
         delay = max(0.0, float(duration) - 30) if duration else 0.0
         log.info(
@@ -408,10 +440,11 @@ class GuildMusicState:
             if delay > 0:
                 log.debug(f"[{self.guild}] Pre-fetch sleeping {delay:.0f}s")
                 await asyncio.sleep(delay)
-            if not self.queue:
+            upcoming = self.display_queue
+            if not upcoming:
                 log.debug(f"[{self.guild}] Pre-fetch woke but queue is now empty — aborting")
                 return
-            next_track = self.queue[0]
+            next_track = upcoming[0]
             log.info(f"[{self.guild}] Pre-fetching stream for '{next_track.title}'")
             t0 = time.perf_counter()
             stream_url, before_opts, resolved_url = await self._fetch_stream(next_track.webpage_url)
@@ -459,7 +492,7 @@ class GuildMusicState:
         embed.add_field(name="Loop", value=loop_label, inline=True)
         embed.add_field(name="Volume", value=f"{int(self.volume * 100)}%", inline=True)
 
-        upcoming = self.queue[:2]
+        upcoming = self.display_queue[:2]
         if upcoming:
             lines = [
                 f"`{i + 1}.` {f'[{t.title}]({t.webpage_url})' if t.webpage_url.startswith('http') else t.title} — `{t.fmt_duration()}`"
@@ -521,11 +554,11 @@ class GuildMusicState:
                 voice_channel_id=self.voice_client.channel.id if self.voice_client and self.voice_client.channel else None,
                 text_channel_id=self.text_channel.id if self.text_channel else None,
                 current=self.current.to_dict() if self.current else None,
-                queue=[t.to_dict() for t in self.queue],
+                queue=[t.to_dict() for t in self.display_queue],
                 loop_mode=self.loop_mode.value,
                 volume=self.volume,
             ))
-            log.debug(f"[{self.guild}] State saved (current='{self.current.title if self.current else None}', queue={len(self.queue)})")
+            log.debug(f"[{self.guild}] State saved (current='{self.current.title if self.current else None}', queue={len(self.display_queue)})")
         except Exception as e:
             log.error(f"[{self.guild}] Failed to save music state: {e}")
 
@@ -596,7 +629,7 @@ class QueueView(discord.ui.View):
 
     @property
     def _max_page(self) -> int:
-        return max(0, math.ceil(len(self.state.queue) / QUEUE_PAGE_SIZE) - 1)
+        return max(0, math.ceil(len(self.state.display_queue) / QUEUE_PAGE_SIZE) - 1)
 
     def build_embed(self) -> discord.Embed:
         s = self.state
@@ -614,18 +647,19 @@ class QueueView(discord.ui.View):
                 value=f"{link} — `{s.current.fmt_duration()}`",
                 inline=False,
             )
-        if not s.queue:
+        display_queue = s.display_queue
+        if not display_queue:
             embed.add_field(name="Up next", value="Queue is empty.", inline=False)
         else:
             start = self.page * QUEUE_PAGE_SIZE
-            end = min(start + QUEUE_PAGE_SIZE, len(s.queue))
+            end = min(start + QUEUE_PAGE_SIZE, len(display_queue))
             lines = []
-            for i, t in enumerate(s.queue[start:end], start=start):
+            for i, t in enumerate(display_queue[start:end], start=start):
                 is_url = t.webpage_url.startswith("http")
                 link = f"[{t.title}]({t.webpage_url})" if is_url else t.title
                 lines.append(f"`{i + 1}.` {link} — `{t.fmt_duration()}`")
             embed.add_field(name="Up next", value="\n".join(lines), inline=False)
-            embed.set_footer(text=f"Page {self.page + 1}/{self._max_page + 1} · {len(s.queue)} tracks queued")
+            embed.set_footer(text=f"Page {self.page + 1}/{self._max_page + 1} · {len(display_queue)} tracks queued")
         return embed
 
     @discord.ui.button(label="◀", style=discord.ButtonStyle.secondary)
@@ -735,7 +769,7 @@ class NowPlayingView(discord.ui.View):
         if state is None:
             await interaction.response.send_message("Not connected.", ephemeral=True)
             return
-        if not state.queue:
+        if not state.display_queue:
             await interaction.response.send_message("Queue is empty.", ephemeral=True)
             return
         state.shuffle()
@@ -804,31 +838,41 @@ class Music(commands.Cog):
             state._intentional_disconnect = False
             return
 
-        if state.current is None and not state.queue:
+        if state.current is None and not state.display_queue:
             log.debug(f"[{member.guild}] Voice state update: disconnected but nothing queued, not rejoining")
             return
 
-        log.warning(
-            f"[{member.guild}] Unexpectedly disconnected from {before.channel} "
-            f"(current='{state.current.title if state.current else None}', queue={len(state.queue)}). "
-            f"Attempting to rejoin in 2s..."
-        )
-        await asyncio.sleep(2)
-        try:
-            log.debug(f"[{member.guild}] Clearing stale voice session before rejoin")
-            await member.guild.change_voice_state(channel=None)
-            await asyncio.sleep(0.5)
-            state.voice_client = await before.channel.connect(timeout=15)
-            log.info(f"[{member.guild}] Rejoined {before.channel}")
-            # Re-queue the current track so it replays from the start
-            if state.current is not None:
-                log.debug(f"[{member.guild}] Re-inserting current track '{state.current.title}' at queue front")
-                state.queue.insert(0, state.current)
-                state.current = None
-            await state.start_player()
-        except Exception as e:
-            log.error(f"[{member.guild}] Rejoin failed: {e}")
-            state.voice_client = None
+        if state._rejoin_lock.locked():
+            log.debug(f"[{member.guild}] Rejoin already in progress, ignoring duplicate disconnect event")
+            return
+
+        async with state._rejoin_lock:
+            log.warning(
+                f"[{member.guild}] Unexpectedly disconnected from {before.channel} "
+                f"(current='{state.current.title if state.current else None}', queue={len(state.display_queue)}). "
+                f"Attempting to rejoin in 2s..."
+            )
+            await asyncio.sleep(2)
+            try:
+                # Mark this as intentional so our own leave below doesn't re-trigger
+                # this handler and start a second, overlapping rejoin.
+                state._intentional_disconnect = True
+                log.debug(f"[{member.guild}] Clearing stale voice session before rejoin")
+                await member.guild.change_voice_state(channel=None)
+                await asyncio.sleep(0.5)
+                state.voice_client = await before.channel.connect(timeout=15)
+                log.info(f"[{member.guild}] Rejoined {before.channel}")
+                # Re-queue the current track so it replays from the start
+                if state.current is not None:
+                    log.debug(f"[{member.guild}] Re-inserting current track '{state.current.title}' at queue front")
+                    state.queue.insert(0, state.current)
+                    state.current = None
+                await state.start_player()
+            except Exception as e:
+                log.error(f"[{member.guild}] Rejoin failed: {e}")
+                state.voice_client = None
+            finally:
+                state._intentional_disconnect = False
 
     # ── Startup restore ────────────────────────────────────────────────────────
 
@@ -1279,7 +1323,7 @@ class Music(commands.Cog):
             return
 
         # Bot is not connected but has a saved queue — join and start
-        if state.queue or state.current:
+        if state.display_queue or state.current:
             if err := self._pre_check_voice(interaction):
                 await interaction.response.send_message(err, ephemeral=True)
                 return
@@ -1339,7 +1383,7 @@ class Music(commands.Cog):
             await interaction.response.send_message("Server only.", ephemeral=True)
             return
         state = self._state(interaction.guild)
-        if state.current is None and not state.queue:
+        if state.current is None and not state.display_queue:
             await interaction.response.send_message("The queue is empty.", ephemeral=True)
             return
         view = QueueView(state)
@@ -1364,15 +1408,34 @@ class Music(commands.Cog):
         state = await self._check_same_channel(interaction)
         if state is None:
             return
-        if position < 1 or position > len(state.queue):
+        total = len(state.display_queue)
+        if position < 1 or position > total:
             await interaction.response.send_message(
-                f"Position must be between 1 and {len(state.queue)}.", ephemeral=True
+                f"Position must be between 1 and {total}.", ephemeral=True
             )
             return
-        removed = state.queue.pop(position - 1)
+        idx = position - 1
+        if idx < len(state.queue):
+            removed = state.queue.pop(idx)
+        else:
+            removed = state._loop_buffer.pop(idx - len(state.queue))
         await state._save()
         log.info(f"[{interaction.guild}] Removed '{removed.title}' from queue (position {position})")
         await interaction.response.send_message(f"Removed **{removed.title}** from the queue.")
+
+    @app_commands.command(name="clear", description="Clear all songs from the queue without stopping playback.")
+    @app_commands.guild_only()
+    async def clear_cmd(self, interaction: discord.Interaction):
+        state = await self._check_same_channel(interaction)
+        if state is None:
+            return
+        if not state.display_queue:
+            await interaction.response.send_message("The queue is already empty.", ephemeral=True)
+            return
+        count = state.clear_queue()
+        await state._save()
+        log.info(f"[{interaction.guild}] Queue cleared ({count} tracks) by {interaction.user}")
+        await interaction.response.send_message(f"Cleared **{count}** track{'s' if count != 1 else ''} from the queue.")
 
     @app_commands.command(name="shuffle", description="Shuffle the queue.")
     @app_commands.guild_only()
@@ -1380,7 +1443,7 @@ class Music(commands.Cog):
         state = await self._check_same_channel(interaction)
         if state is None:
             return
-        if not state.queue:
+        if not state.display_queue:
             await interaction.response.send_message("The queue is empty.", ephemeral=True)
             return
         state.shuffle()
