@@ -133,7 +133,7 @@ class RankCard:
             cur_str = RankCard._convert_number(current_exp)
             max_str = RankCard._convert_number(max_exp)
             draw.text((197, (327 / 2) + 125), f"LEVEL - {RankCard._convert_number(level)}", font=font30, fill=text_color, stroke_width=1, stroke_fill=(0, 0, 0))
-            w, _ = draw.textsize(f"{cur_str}/{max_str}", font=font30)
+            w = draw.textlength(f"{cur_str}/{max_str}", font=font30)
             draw.text((638 - w - 50, (327 / 2) + 125), f"{cur_str}/{max_str}", font=font30, fill=text_color, stroke_width=1, stroke_fill=(0, 0, 0))
 
             mask_im = Image.open(path + "/assets/mask_circle.jpg").convert('L').resize((170, 170))
