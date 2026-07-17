@@ -31,6 +31,11 @@ PLAYLIST_TRACK_LIMIT = 500
 QUEUE_PAGE_SIZE = 10
 ALONE_TIMEOUT = 300
 
+# Channel types the now-playing panel and status messages can be posted to —
+# includes voice channels since Discord's voice-channel text chat is a valid
+# place to run music commands from.
+MusicTextChannel = discord.TextChannel | discord.VoiceChannel | discord.StageChannel | discord.Thread
+
 _YDL_COMMON = {
     "quiet": True,
     "no_warnings": True,
@@ -93,7 +98,7 @@ class GuildMusicState:
         self._loop_buffer: list[Track] = []
         self.current: Track | None = None
         self.voice_client: discord.VoiceClient | None = None
-        self.text_channel: discord.TextChannel | None = None
+        self.text_channel: MusicTextChannel | None = None
         self.loop_mode = LoopMode.OFF
         self.volume: float = 0.5
 
@@ -915,7 +920,7 @@ class Music(commands.Cog):
 
         if tc_id:
             ch = guild.get_channel(tc_id)
-            if isinstance(ch, discord.TextChannel):
+            if isinstance(ch, MusicTextChannel):
                 state.text_channel = ch
             else:
                 log.debug(f"Queue restore [{guild}]: text channel {tc_id} not found")
@@ -1202,7 +1207,7 @@ class Music(commands.Cog):
                 await interaction.followup.send(f"Failed to join your voice channel: {e}", ephemeral=True)
                 return None
 
-        if isinstance(interaction.channel, discord.TextChannel):
+        if isinstance(interaction.channel, MusicTextChannel):
             state.text_channel = interaction.channel
 
         return state
