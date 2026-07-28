@@ -21,7 +21,7 @@ dependencies = [
     "toml~=0.10",
     "wikipedia~=1.4",
     "spotdl~=4.5",
-    "yt-dlp~=2026.6",
+    "yt-dlp~=2026.7",
 ]
 
 [dependency-groups]
