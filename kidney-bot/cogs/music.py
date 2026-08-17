@@ -40,10 +40,15 @@ _YDL_COMMON = {
     "quiet": True,
     "no_warnings": True,
     "source_address": "0.0.0.0",
-    # Lets yt-dlp use YouTube's non-SABR-restricted clients instead of
-    # falling back to android_vr, whose stream URLs are frequently 403'd.
-    # See the bgutil-provider service in docker-compose.yml.
-    "extractor_args": {"youtubepot-bgutilhttp": {"base_url": ["http://bgutil-provider:4416"]}},
+    # visionos needs no PO token and, as of this writing, is the one client
+    # YouTube isn't 403'ing — android_vr and mweb (even with a valid PO
+    # token from the bgutil-provider service below) are both currently
+    # unreliable due to YouTube-side changes. See yt-dlp#16796 and #17368.
+    # Only available in yt-dlp nightly — see the version pin in pyproject.toml.
+    "extractor_args": {
+        "youtubepot-bgutilhttp": {"base_url": ["http://bgutil-provider:4416"]},
+        "youtube": {"player_client": ["visionos"]},
+    },
 }
 
 
