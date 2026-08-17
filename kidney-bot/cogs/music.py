@@ -40,6 +40,10 @@ _YDL_COMMON = {
     "quiet": True,
     "no_warnings": True,
     "source_address": "0.0.0.0",
+    # Lets yt-dlp use YouTube's non-SABR-restricted clients instead of
+    # falling back to android_vr, whose stream URLs are frequently 403'd.
+    # See the bgutil-provider service in docker-compose.yml.
+    "extractor_args": {"youtubepot-bgutilhttp": {"base_url": ["http://bgutil-provider:4416"]}},
 }
 
 

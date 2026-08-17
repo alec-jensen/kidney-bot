@@ -8,3 +8,12 @@ services:
             - ./config.json:/app/config.json:ro
             - ./database-backups:/app/utils/database-backup-util/backup
         restart: unless-stopped
+        depends_on:
+            - bgutil-provider
+
+    # Generates PO tokens so yt-dlp can use YouTube's non-SABR-restricted
+    # clients instead of falling back to android_vr, whose stream URLs are
+    # frequently rejected (HTTP 403) by YouTube's CDN.
+    bgutil-provider:
+        image: brainicism/bgutil-ytdlp-pot-provider:latest
+        restart: unless-stopped
