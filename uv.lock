@@ -752,7 +752,7 @@ requires-dist = [
     { name = "spotdl", specifier = "~=4.5" },
     { name = "toml", specifier = "~=0.10" },
     { name = "wikipedia", specifier = "~=1.4" },
-    { name = "yt-dlp", specifier = "~=2026.6" },
+    { name = "yt-dlp", specifier = "==2026.8.16.20253.dev0" },
 ]
 
 [package.metadata.requires-dev]
@@ -2029,11 +2029,11 @@ wheels = [
 
 [[package]]
 name = "yt-dlp"
-version = "2026.7.4"
+version = "2026.8.16.20253.dev0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/47/c5/9972af4b472b0d55badf841ebafd2f98944cb0ae0f46e11d01f363ea5b91/yt_dlp-2026.7.4.tar.gz", hash = "sha256:b094813404f87a9dd2186f00815231df32e5fd8a5403be0f807b3bb2d21a4432", size = 3049326, upload-time = "2026-07-04T22:42:14.837Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/a1/8a/fb9a96ffa24a6fb9e2deb6e8bfb703f99aa0df5e6d786f0bdd891dcb1604/yt_dlp-2026.8.16.20253.dev0.tar.gz", hash = "sha256:dee94d5ad9ab0862bdfadbf0f03705b70dcb743b650eebb7ac87b037b08bd3c5", size = 3051628, upload-time = "2026-08-16T02:07:04.316Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/f9/8a/cd4c9b02c10c563adfe78118310129641900e1cd6de888cfae2452072696/yt_dlp-2026.7.4-py3-none-any.whl", hash = "sha256:f11f2b11d5a8ac4059f9bdf29fa4407dc7c6bb00c5097e95ca22a7a9db518266", size = 3184705, upload-time = "2026-07-04T22:42:12.989Z" },
+    { url = "https://files.pythonhosted.org/packages/16/f8/ecb92ac72f584535fcc755771b763685193612de286ba04cbaebb5aa2af8/yt_dlp-2026.8.16.20253.dev0-py3-none-any.whl", hash = "sha256:c95f063572f9aefb3c1650cae6d178967e538c6248e1d70fa46e3bbc26f40b5d", size = 3185644, upload-time = "2026-08-16T02:07:02.401Z" },
 ]
 
 [package.optional-dependencies]

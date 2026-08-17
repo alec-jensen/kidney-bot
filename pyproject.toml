@@ -21,7 +21,11 @@ dependencies = [
     "toml~=0.10",
     "wikipedia~=1.4",
     "spotdl~=4.5",
-    "yt-dlp~=2026.6",
+    # Pinned to a nightly build: the visionos client (needed to avoid YouTube's
+    # 403s on android_vr/mweb) isn't in a stable release yet. Needs periodic
+    # manual bumps — check https://pypi.org/project/yt-dlp/#history for newer
+    # nightlies if this one starts failing.
+    "yt-dlp==2026.8.16.20253.dev0",
     "pillow~=12.2",
     "bgutil-ytdlp-pot-provider~=1.3",
 ]
