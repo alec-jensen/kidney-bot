@@ -104,6 +104,7 @@ class GuildMusicState:
 
         self._play_next_event = asyncio.Event()
         self._player_task: asyncio.Task | None = None
+        self._playback_error: Exception | None = None
 
         self._play_start: float = 0.0
         self._pause_start: float = 0.0
@@ -233,6 +234,7 @@ class GuildMusicState:
     def _after_play(self, error: Exception | None):
         if error:
             log.error(f"[{self.guild}] Playback error from FFmpeg: {error}")
+            self._playback_error = error
         else:
             log.debug(f"[{self.guild}] Track finished cleanly")
         if self._pause_start:
@@ -337,6 +339,15 @@ class GuildMusicState:
             await self._play_next_event.wait()
             log.debug(f"[{self.guild}] Play-next event fired for '{track.title}'")
 
+            if self._playback_error is not None:
+                err, self._playback_error = self._playback_error, None
+                msg = _ytdlp_error_message(err, track.title)
+                if self.text_channel:
+                    try:
+                        await self.text_channel.send(f"⚠️ {msg}, skipping.")
+                    except Exception:
+                        pass
+
     def _next_track(self) -> Track | None:
         if self.loop_mode == LoopMode.TRACK and self.current is not None:
             log.debug(f"[{self.guild}] Loop=TRACK: replaying '{self.current.title}'")
@@ -412,11 +423,17 @@ class GuildMusicState:
                 stream_url = best.get("url")
                 if not stream_url:
                     raise RuntimeError("Selected format has no stream URL")
-                return stream_url, resolved
+                headers = best.get("http_headers") or info.get("http_headers") or {}
+                return stream_url, resolved, headers
 
-        audio_url, resolved_url = await self.bot.loop.run_in_executor(None, _run)
+        audio_url, resolved_url, headers = await self.bot.loop.run_in_executor(None, _run)
         reconnect = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
         before_opts = f"-ss {int(seek_to)} {reconnect}" if seek_to is not None else reconnect
+        if headers:
+            # The stream URL is signed for a specific client; googlevideo 403s
+            # requests that don't echo back that client's headers (esp. User-Agent).
+            header_str = "".join(f"{k}: {v}\r\n" for k, v in headers.items())
+            before_opts += f' -headers "{header_str}"'
         return audio_url, before_opts, resolved_url
 
     # ── Pre-fetch ─────────────────────────────────────────────────────────────
