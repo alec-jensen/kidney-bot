@@ -80,6 +80,11 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
+# Deno is required by yt-dlp to solve YouTube's JS challenges; without it,
+# extraction falls back to the android_vr client, whose stream URLs are
+# frequently rejected (HTTP 403) by YouTube's CDN.
+COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
+
 # Copy the virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 
